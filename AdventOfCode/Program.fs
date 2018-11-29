@@ -36,6 +36,7 @@ let main _ =
     let solution = match (year, day) with
                    | Year 2015, Day 1 -> Some(Year2015.Day1.go())
                    | Year 2015, Day 2 -> Some(Year2015.Day2.go())
+                   | Year 2015, Day 3 -> Some(Year2015.Day3.go())
                    | _ -> None
     
     match solution with
