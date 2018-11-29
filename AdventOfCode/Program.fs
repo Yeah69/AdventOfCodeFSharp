@@ -19,7 +19,7 @@ module RiddleChoices =
             yield line }
 
 [<EntryPoint>]
-let main argv =
+let main _ =
     printfn "Welcome to Yeah's Advent of Code solutions!"
     printfn ""
 
@@ -35,6 +35,7 @@ let main argv =
 
     let solution = match (year, day) with
                    | Year 2015, Day 1 -> Some(Year2015.Day1.go())
+                   | Year 2015, Day 2 -> Some(Year2015.Day2.go())
                    | _ -> None
     
     match solution with
