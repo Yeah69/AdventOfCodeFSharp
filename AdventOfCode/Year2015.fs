@@ -96,3 +96,25 @@ module Day3 =
 
 
         { First = housesSum.ToString(); Second = housesSharedWork.ToString() }
+
+module Day4 =
+    let go() =
+        let input = inputFromResource "AdventOfCode.Inputs._2015.04.txt"
+
+        let sequence =
+            seq { while true do yield input }
+            |> Seq.mapi (fun i input -> i, input + (i |> string))
+            |> Seq.skip 1 
+            |> Seq.map (fun (i, message) -> i, System.Text.Encoding.ASCII.GetBytes(message))
+            |> Seq.map (fun (i, message) -> i, Operations.md5 message)
+            
+        let (i1, _) = sequence 
+                      |> Seq.filter (fun (_, hash) -> hash.StartsWith("00000")) 
+                      |> Seq.head
+
+        let (i2, _) = sequence 
+                      |> Seq.filter (fun (_, hash) -> hash.StartsWith("000000")) 
+                      |> Seq.head
+
+
+        { First = i1.ToString(); Second = i2.ToString() }
