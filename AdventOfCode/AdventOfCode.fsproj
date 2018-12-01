@@ -6,6 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Inputs\2018\01.txt" />
     <EmbeddedResource Include="Inputs\2015\04.txt" />
     <EmbeddedResource Include="Inputs\2015\03.txt" />
     <EmbeddedResource Include="Inputs\2015\02.txt" />
@@ -13,6 +14,7 @@
     <Compile Include="Domain.fs" />
     <Compile Include="Operations.fs" />
     <Compile Include="Year2015.fs" />
+    <Compile Include="Year2018.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
