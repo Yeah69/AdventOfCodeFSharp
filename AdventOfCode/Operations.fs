@@ -7,7 +7,7 @@ let inputFromResource path =
     use stream = 
         Assembly
             .GetExecutingAssembly()
-            .GetManifestResourceStream(path)
+            .GetManifestResourceStream path
     use reader = new StreamReader(stream)
     let input = reader.ReadToEnd()
     printfn "Input:"
