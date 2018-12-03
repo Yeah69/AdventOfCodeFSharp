@@ -66,3 +66,54 @@ module Day2 =
             |> Seq.map (fun (s, _) -> s)
             |> Seq.head
         { First = (duplesCount * triplesCount).ToString(); Second = result }
+
+module Day3 =
+    open System.Text.RegularExpressions
+    type Box = { Id: int; X: int; Y: int; Width: int; Heigth: int }
+    type Integer = int
+    
+    let flat2Darray array2D = 
+            seq { for x in [0..(Array2D.length1 array2D) - 1] do 
+                        for y in [0..(Array2D.length2 array2D) - 1] do 
+                            yield array2D.[x, y] }
+    
+    let go() =
+        let input = inputFromResource "AdventOfCode.Inputs._2018.03.txt"
+        let lines = input.Split("\r\n")
+        let boxes = lines |> Array.choose (fun line -> 
+            let matchResult = Regex.Match(line, "#(\d*) @ (\d*),(\d*): (\d*)x(\d*)")
+            match matchResult.Success with
+            | true -> 
+                Some ({ Id = Integer.Parse(matchResult.Groups.[1].Value); 
+                        X = Integer.Parse(matchResult.Groups.[2].Value); 
+                        Y = Integer.Parse(matchResult.Groups.[3].Value); 
+                        Width = Integer.Parse(matchResult.Groups.[4].Value); 
+                        Heigth = Integer.Parse(matchResult.Groups.[5].Value)})
+            | false -> None)
+        let field : int[,] = Array2D.zeroCreate 1000 1000;
+        let set = Set.empty.Add(-1)
+        let set = 
+            boxes
+            |> Array.fold (fun set box -> 
+                seq { box.X .. (box.X + box.Width - 1)}
+                |> Seq.allPairs (seq { box.Y .. (box.Y + box.Heigth - 1)})
+                |> Seq.fold (fun (set: Set<int>) (x, y) -> 
+                    if (Array2D.get field x y) = 0 then 
+                        (Array2D.set field x y box.Id)
+                        set
+                    else 
+                        let set = set |> Set.add (Array2D.get field x y)
+                        (Array2D.set field x y -1)
+                        set |> Set.add box.Id) set) set
+        let count = flat2Darray field
+                    |> Seq.countBy (fun i -> i)
+                    |> Seq.filter (fun (key, _) -> key = 2)
+                    |> Seq.map (fun (_, value) -> value)
+                    |> Seq.head
+        let id = 
+            boxes 
+            |> Seq.ofArray 
+            |> Seq.filter (fun box -> set.Contains(box.Id) = false) 
+            |> Seq.map (fun box -> box.Id) 
+            |> Seq.head
+        { First = count.ToString(); Second = id.ToString() }

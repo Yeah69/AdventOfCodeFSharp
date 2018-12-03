@@ -40,6 +40,7 @@ let main _ =
                    | Year 2015, Day 4 -> Some(Year2015.Day4.go())
                    | Year 2018, Day 1 -> Some(Year2018.Day1.go())
                    | Year 2018, Day 2 -> Some(Year2018.Day2.go())
+                   | Year 2018, Day 3 -> Some(Year2018.Day3.go())
                    | _ -> None
     
     match solution with
