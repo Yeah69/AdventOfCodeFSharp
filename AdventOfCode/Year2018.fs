@@ -4,13 +4,11 @@ open Domain
 open Operations
 
 module Day1 =
-    open System.Collections.Generic
-
     type Integer = int32
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2018.01.txt"
         let frequencyChanges = 
-            input.Split("\r\n")
+            input.Split(System.Environment.NewLine)
             |> Array.choose (fun line -> 
                 match Integer.TryParse line with
                 | (true, value) -> Some value
@@ -21,15 +19,10 @@ module Day1 =
             |> Array.sum
         let result2 =
             Seq.unfold (fun i -> Some (frequencyChanges.[i % frequencyChanges.Length] , i + 1)) 0
-            |> Seq.scan (fun ((listSoFar: HashSet<int>), sumSoFar, _) i -> 
+            |> Seq.scan (fun ((setSoFar: Set<int>), sumSoFar, _) i -> 
                 let sum = sumSoFar + i
-                match listSoFar.Contains(sum) with
-                | true ->
-                    listSoFar.Add sum |> ignore
-                    listSoFar, sum, true
-                | false -> 
-                    listSoFar.Add sum |> ignore
-                    listSoFar, sum, false) (new HashSet<int>(), 0, false)
+                if setSoFar.Contains sum then setSoFar.Add sum, sum, true
+                else setSoFar.Add sum, sum, false) (Set.empty, 0, false)
             |> Seq.filter (fun (_, _, isDuplicate) -> isDuplicate)
             |> Seq.map (fun (_, sum, _) -> sum)
             |> Seq.head
@@ -38,7 +31,7 @@ module Day1 =
 module Day2 =
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2018.02.txt"
-        let lines = input.Split("\r\n")
+        let lines = input.Split(System.Environment.NewLine)
         let (duplesCount, triplesCount) = 
             lines
             |> Seq.ofArray
@@ -79,7 +72,7 @@ module Day3 =
     
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2018.03.txt"
-        let lines = input.Split("\r\n")
+        let lines = input.Split(System.Environment.NewLine)
         let boxes = lines |> Array.choose (fun line -> 
             let matchResult = Regex.Match(line, "#(\d*) @ (\d*),(\d*): (\d*)x(\d*)")
             match matchResult.Success with
