@@ -74,7 +74,7 @@ module Day3 =
         let input = inputFromResource "AdventOfCode.Inputs._2018.03.txt"
         let lines = input.Split(System.Environment.NewLine)
         let boxes = lines |> Array.choose (fun line -> 
-            let matchResult = Regex.Match(line, "#(\d*) @ (\d*),(\d*): (\d*)x(\d*)")
+            let matchResult = Regex.Match(line, "#(\d+) @ (\d+),(\d+): (\d+)x(\d+)")
             match matchResult.Success with
             | true -> 
                 Some ({ Id = Integer.Parse(matchResult.Groups.[1].Value); 
@@ -110,3 +110,87 @@ module Day3 =
             |> Seq.map (fun box -> box.Id) 
             |> Seq.head
         { First = count.ToString(); Second = id.ToString() }
+
+module Day4 =
+    
+    open System;
+    open System.Text.RegularExpressions
+    open System.ComponentModel.DataAnnotations
+
+    type Integer = int
+
+    type Event = 
+        | BeginsDuty of int 
+        | FallsAsleep
+        | WakesUp
+
+    type Log = { Timestamp: DateTime; Event: Event}
+
+    let tryParseLog line =
+        let matchResult = Regex.Match(line, "\[(\d+)-(\d+)-(\d+) (\d+):(\d+)\] (.*)")
+        if matchResult.Success then
+            let year = Integer.Parse(matchResult.Groups.[1].Value)
+            let month = Integer.Parse(matchResult.Groups.[2].Value)
+            let day = Integer.Parse(matchResult.Groups.[3].Value)
+            let hour = Integer.Parse(matchResult.Groups.[4].Value)
+            let minute = Integer.Parse(matchResult.Groups.[5].Value)
+            let description = matchResult.Groups.[6].Value
+            let timestamp = DateTime (year, month, day, hour, minute, 0)
+            let matchResult = Regex.Match(description, "Guard #(\d+) begins shift")
+            let event = 
+                if matchResult.Success then
+                    let guardNumber = Integer.Parse(matchResult.Groups.[1].Value)
+                    Some(BeginsDuty guardNumber)
+                else if description = "falls asleep" then Some FallsAsleep
+                else if description = "wakes up" then Some WakesUp
+                else None
+            match event with
+            | Some event -> Some({ Timestamp = timestamp; Event = event })
+            | None -> None
+        else None
+
+    let go() =
+        let input = inputFromResource "AdventOfCode.Inputs._2018.04.txt"
+        let lines = input.Split(System.Environment.NewLine)
+
+        let minutesOfGuards =
+            lines
+            |> Seq.ofArray
+            |> Seq.choose tryParseLog
+            |> Seq.sortBy (fun log -> log.Timestamp)
+            |> Seq.scan (fun (number, _) log -> 
+                match log.Event with
+                | BeginsDuty guard -> (guard, None)
+                | FallsAsleep | WakesUp -> (number, Some log)) (0, None)
+            |> Seq.choose (fun (number, log) ->
+                match log with
+                | Some log -> Some (number, log)
+                | None -> None)
+            |> Seq.pairwise
+            |> Seq.collect (fun ((number1, log1), (number2, log2)) ->
+                match number1, log1.Event, number2, log2.Event with
+                | number1, FallsAsleep, number2, WakesUp when number1 = number2 ->
+                    seq {for i in log1.Timestamp.Minute .. log2.Timestamp.Minute - 1 do yield (number1, i)}
+                | _, _, _, _ -> Seq.empty)
+            |> Seq.toArray
+
+        let (maxGuard1, _) =
+            minutesOfGuards
+            |> Array.countBy (fun (guard, _) -> guard)
+            |> Array.maxBy (fun (key, value) -> value)
+            
+        let (maxMinute1, _) =
+            minutesOfGuards
+            |> Seq.ofArray
+            |> Seq.filter (fun (guard, _) -> guard = maxGuard1)
+            |> Seq.countBy (fun (_, minute) -> minute)
+            |> Seq.maxBy (fun (_, value) -> value)
+
+        let ((maxGuard2, maxMinute2), _) =
+            minutesOfGuards
+            |> Seq.ofArray
+            |> Seq.countBy (fun (guard, minute) -> (guard, minute))
+            |> Seq.maxBy (fun (_, value) -> value)
+
+        
+        { First = (maxGuard1 * maxMinute1).ToString(); Second = (maxGuard2 * maxMinute2).ToString() }
