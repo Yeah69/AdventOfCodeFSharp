@@ -115,7 +115,6 @@ module Day4 =
     
     open System;
     open System.Text.RegularExpressions
-    open System.ComponentModel.DataAnnotations
 
     type Integer = int
 
@@ -177,7 +176,7 @@ module Day4 =
         let (maxGuard1, _) =
             minutesOfGuards
             |> Array.countBy (fun (guard, _) -> guard)
-            |> Array.maxBy (fun (key, value) -> value)
+            |> Array.maxBy (fun (_, value) -> value)
             
         let (maxMinute1, _) =
             minutesOfGuards
@@ -194,3 +193,43 @@ module Day4 =
 
         
         { First = (maxGuard1 * maxMinute1).ToString(); Second = (maxGuard2 * maxMinute2).ToString() }
+
+module Day5 =
+
+    type Character = char
+
+    let go() =
+        let input = inputFromResource "AdventOfCode.Inputs._2018.05.txt"
+        
+        let firstPair (s: string) =
+            s.ToCharArray() 
+            |> Seq.ofArray 
+            |> Seq.mapi (fun i c -> (i, c))
+            |> Seq.pairwise
+            |> Seq.filter (fun ((_, c1), (_, c2)) -> 
+                Character.ToUpper(c1) = Character.ToUpper(c2) && ((Character.IsUpper(c1) && Character.IsLower(c2)) || (Character.IsUpper(c2) && Character.IsLower(c1))))
+            |> Seq.map (fun ((i1, _), (_, _)) -> i1)
+            |> Seq.tryHead
+
+        let countOfSolution input = 
+            let lastString = 
+                Seq.unfold (fun s ->
+                    let nextPair = firstPair s
+                    match nextPair with
+                    | Some i ->
+                        let newS = s.Remove(i, 2)
+                        Some(newS, newS)
+                    | None -> None) input
+                |> Seq.last
+            lastString.Length
+
+        let result1 = countOfSolution input
+
+        let result2 = 
+            seq{ 'a' .. 'z' }
+            |> Seq.map (fun c -> 
+                let inputWithoutChar = input.Replace(c.ToString(),"").Replace(Character.ToUpper(c).ToString(),"")
+                countOfSolution inputWithoutChar)
+            |> Seq.min
+
+        { First = result1.ToString(); Second = result2.ToString() }
