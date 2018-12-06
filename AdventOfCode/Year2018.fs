@@ -233,3 +233,71 @@ module Day5 =
             |> Seq.min
 
         { First = result1.ToString(); Second = result2.ToString() }
+
+module Day6 =
+    
+    open System;
+    open System.Text.RegularExpressions
+
+    type Integer = int
+
+    let go() =
+        let input = inputFromResource "AdventOfCode.Inputs._2018.06.txt"
+        let lines = input.Split(System.Environment.NewLine)
+        let points = 
+            lines 
+            |> Array.choose (fun line -> 
+                let matchResult = Regex.Match(line, "(\d+), (\d+)")
+                match matchResult.Success with
+                | true -> 
+                    Some ( Integer.Parse(matchResult.Groups.[1].Value), 
+                           Integer.Parse(matchResult.Groups.[2].Value))
+                | false -> None)
+        
+        let distanceMatrix =
+            seq { 0 .. 500} 
+            |> Seq.allPairs (seq { 0 .. 500 })
+            |> Seq.map (fun (x, y) -> 
+                let bestDistances = 
+                    points 
+                    |> Seq.ofArray 
+                    |> Seq.mapi (fun i (pX, pY) -> (i, Math.Abs(pX - x) + Math.Abs(pY-y))) 
+                    |> Seq.sortBy (fun (_, d) -> d) 
+                    |> Seq.take 2 
+                    |> Seq.toList
+
+                match bestDistances with
+                | [ (i1, d1); (_, d2) ] when d1 < d2 && (i1 = 7 || i1 = 12 || i1 = 21 || i1 = 31 || i1 = 43 || i1 = 44) -> ((x, y), i1)
+                | [ (i1, d1); (_, d2) ] when d1 < d2 -> ((x, y), i1)
+                | _ -> ((x, y), -1))
+            |> Seq.toList
+
+        let setOfInfinites =
+            distanceMatrix 
+            |> Seq.ofList 
+            |> Seq.filter (fun ((x, y), _) -> x = 0 || x = 500 || y = 0 || y = 500) 
+            |> Seq.map (fun (_, i) -> i) 
+            |> Set.ofSeq
+        let setOfInfinites = setOfInfinites |> Set.add -1
+
+        let maxFinite =
+            distanceMatrix
+            |> Seq.ofList
+            |> Seq.filter (fun (_, i) -> setOfInfinites |> Set.contains i |> not)
+            |> Seq.countBy (fun (_, i) -> i)
+            |> Seq.map (fun (_, count) -> count)
+            |> Seq.max
+
+        let result2 =
+            seq { 0 .. 500} 
+            |> Seq.allPairs (seq { 0 .. 500 })
+            |> Seq.filter (fun (x, y) -> 
+                let accumulatedDistance = 
+                    points 
+                    |> Seq.ofArray 
+                    |> Seq.map (fun (pX, pY) -> (Math.Abs(pX - x) + Math.Abs(pY-y))) 
+                    |> Seq.sum
+                accumulatedDistance < 10000)
+            |> Seq.length
+
+        { First = maxFinite.ToString(); Second = result2.ToString() }
