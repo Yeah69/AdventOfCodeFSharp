@@ -195,41 +195,81 @@ module Day4 =
         { First = (maxGuard1 * maxMinute1).ToString(); Second = (maxGuard2 * maxMinute2).ToString() }
 
 module Day5 =
+    open System
 
     type Character = char
 
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2018.05.txt"
+        let inputAsMemory = input.AsMemory()
+
+        let matchCharCombo c1 c2 =
+            Char.IsLower(c1) && Char.IsUpper(c2) && c1 = Char.ToLower(c2) || Char.IsUpper(c1) && Char.IsLower(c2) && c1 = Char.ToUpper(c2)
+
+        let splitIntoMemories (memory: ReadOnlyMemory<char>) =
+            Seq.unfold (fun (currentSpan: ReadOnlyMemory<char>) ->
+                if currentSpan.Length = 0 then
+                    None
+                else
+                    let maybeIndex = 
+                        seq { 0 .. (currentSpan.Length - 2)}
+                        |> Seq.filter (fun i -> matchCharCombo (currentSpan.Span.Item i) (currentSpan.Span.Item (i + 1)))
+                        |> Seq.tryHead
+                    match maybeIndex with
+                    | Some i -> Some (currentSpan.Slice(0, i), currentSpan.Slice(i + 2))
+                    | None -> Some (currentSpan, ReadOnlyMemory.Empty)) (memory)
+            |> Seq.filter (fun m -> m.Length > 0)
+
+        let iteration listToIterate =
+            let mutable flag = false
+            let newList = 
+                Seq.unfold (fun (list : ReadOnlyMemory<char> list) ->
+                    match list with
+                    | first::second::tail -> 
+                        if first.Length > 0 && second.Length > 0 && matchCharCombo (first.Span.Item (first.Length - 1)) (second.Span.Item 0) then
+                            flag <- true
+                            Some (first.Slice(0, first.Length - 1), second.Slice(1)::tail)
+                        else
+                            Some (first, second::tail)
+                    | [ one ] -> Some (one, [])
+                    | [] -> None) listToIterate
+                |> Seq.filter (fun m -> m.Length > 0)
+                |> Seq.toList
+            newList, flag
+
+        let result1 =
+            Seq.unfold (fun (list : ReadOnlyMemory<char> list, flag) ->
+                if flag then
+                    let (resList, resFlag) = iteration list
+                    Some (resList, (resList, resFlag))
+                else None) ((splitIntoMemories inputAsMemory |> Seq.toList), true)
+            |> Seq.last
+            |> Seq.sumBy (fun mem -> mem.Length)
+
+        let splitByChar c (memory: ReadOnlyMemory<char>) =
+            let upper = Char.ToUpper(c)
+            Seq.unfold (fun (state: ReadOnlyMemory<char>) ->
+                if state.Length = 0 then 
+                    None
+                else
+                    let i = state.Span.IndexOfAny(c, upper)
+                    if i = -1 then
+                        Some(state, ReadOnlyMemory.Empty)
+                    else
+                        Some(state.Slice(0, i), state.Slice(i + 1))) memory
+            |> Seq.filter (fun memory -> memory.Length > 0)
         
-        let firstPair (s: string) =
-            s.ToCharArray() 
-            |> Seq.ofArray 
-            |> Seq.mapi (fun i c -> (i, c))
-            |> Seq.pairwise
-            |> Seq.filter (fun ((_, c1), (_, c2)) -> 
-                Character.ToUpper(c1) = Character.ToUpper(c2) && ((Character.IsUpper(c1) && Character.IsLower(c2)) || (Character.IsUpper(c2) && Character.IsLower(c1))))
-            |> Seq.map (fun ((i1, _), (_, _)) -> i1)
-            |> Seq.tryHead
-
-        let countOfSolution input = 
-            let lastString = 
-                Seq.unfold (fun s ->
-                    let nextPair = firstPair s
-                    match nextPair with
-                    | Some i ->
-                        let newS = s.Remove(i, 2)
-                        Some(newS, newS)
-                    | None -> None) input
-                |> Seq.last
-            lastString.Length
-
-        let result1 = countOfSolution input
-
-        let result2 = 
-            seq{ 'a' .. 'z' }
+        let result2 =
+            seq { 'a' .. 'z' }
             |> Seq.map (fun c -> 
-                let inputWithoutChar = input.Replace(c.ToString(),"").Replace(Character.ToUpper(c).ToString(),"")
-                countOfSolution inputWithoutChar)
+                let splitted = inputAsMemory |> splitByChar c |> Seq.collect (fun memory -> splitIntoMemories memory) |> Seq.toList
+                Seq.unfold (fun (list : ReadOnlyMemory<char> list, flag) ->
+                    if flag then
+                        let (resList, resFlag) = iteration list
+                        Some (resList, (resList, resFlag))
+                    else None) (splitted, true)
+                |> Seq.last
+                |> Seq.sumBy (fun mem -> mem.Length))
             |> Seq.min
 
         { First = result1.ToString(); Second = result2.ToString() }
@@ -301,3 +341,80 @@ module Day6 =
             |> Seq.length
 
         { First = maxFinite.ToString(); Second = result2.ToString() }
+
+module Day7 =
+    
+    open System.Text.RegularExpressions
+    open System.Collections.Generic
+
+    type Character = char
+
+    let go() =
+        let input = inputFromResource "AdventOfCode.Inputs._2018.07.txt"
+        let lines = input.Split(System.Environment.NewLine)
+        let instructions = 
+            lines 
+            |> Array.choose (fun line -> 
+                let matchResult = Regex.Match(line, "Step (.) must be finished before step (.) can begin.")
+                match matchResult.Success with
+                | true -> 
+                    Some ( Character.Parse(matchResult.Groups.[1].Value), 
+                           Character.Parse(matchResult.Groups.[2].Value))
+                | false -> None)
+
+        let predecessors =
+            instructions
+            |> Seq.ofArray
+            |> Seq.groupBy (fun (_, n2) -> n2)
+            |> Seq.map (fun (key, insts) -> (key, (insts |> Seq.map (fun (n1, _) -> n1) |> Seq.toList)))
+            |> Map.ofSeq 
+
+        let allPredsFinished notFinished n =
+            if predecessors.ContainsKey n |> not then
+                true
+            else
+                predecessors.Item n 
+                |> Seq.ofList 
+                |> Seq.forall (fun pred -> (notFinished |> Set.contains pred |> not))
+                
+        let result1 =
+            seq { 
+                let mutable notFinished = seq { 'A' .. 'Z' } |> Set.ofSeq
+                while notFinished.Count > 0 do
+                    let current = 
+                        notFinished 
+                        |> Set.toSeq 
+                        |> Seq.sort 
+                        |> Seq.filter (fun n -> allPredsFinished notFinished n) 
+                        |> Seq.head
+                    yield current
+                    notFinished <- notFinished |> Set.remove current}
+            |> Seq.toArray
+
+        let result1 = new string(result1)
+            
+        let workers = Array.init 5 (fun i -> '.')
+        let mutable notFinished = seq { 'A' .. 'Z' } |> Set.ofSeq
+        let queue = Queue<(int * int * char)>()
+
+        queue.Enqueue (0, -1, '.')
+        let mutable lastTime = 0
+        while queue.Count > 0 do
+            let (currentTime, idleWorker, finishedInst) = (queue.Dequeue())
+            lastTime <- currentTime
+            if idleWorker <> -1 then
+                workers.[idleWorker] <- '.'
+            if finishedInst <> '.' then
+                notFinished <- notFinished |> Set.remove finishedInst
+            let current = 
+                notFinished 
+                |> Set.toSeq 
+                |> Seq.sort 
+                |> Seq.filter (fun n -> (workers |> Array.contains n |> not) && allPredsFinished notFinished n)
+            seq { 0 .. 4 } 
+            |> Seq.filter (fun i -> workers.[i] = '.') 
+            |> Seq.iter2 (fun (c: char) i -> 
+                workers.[i] <- c
+                queue.Enqueue (currentTime + (int c - int 'A' + 61) , i, c)) current |> ignore 
+
+        { First = result1.ToString(); Second = lastTime.ToString() }
