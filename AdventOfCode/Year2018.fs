@@ -18,7 +18,8 @@ module Day1 =
             frequencyChanges
             |> Array.sum
         let result2 =
-            Seq.unfold (fun i -> Some (frequencyChanges.[i % frequencyChanges.Length] , i + 1)) 0
+            ((fun i -> Some (frequencyChanges.[i % frequencyChanges.Length] , i + 1)), 0)
+            ||> Seq.unfold 
             |> Seq.scan (fun ((setSoFar: Set<int>), sumSoFar, _) i -> 
                 let sum = sumSoFar + i
                 if setSoFar.Contains sum then setSoFar.Add sum, sum, true
@@ -44,17 +45,18 @@ module Day2 =
                 | true, false -> (1, 0)
                 | false, true -> (0, 1)
                 | false, false | _ -> (0, 0))
-            |> Seq.fold (fun (currentDuples, currentTriples) (duples, triples) ->
-                (currentDuples + duples, currentTriples + triples)) (0, 0)
+            |> Operations.asFirst (0, 0)
+            ||> Seq.fold (fun (currentDuples, currentTriples) (duples, triples) ->
+                (currentDuples + duples, currentTriples + triples))
         let result = 
             lines
             |> Seq.ofArray
             |> Seq.allPairs lines
             |> Seq.map (fun (first, second) ->
-                (first.ToCharArray() |> Seq.ofArray)
-                |> Seq.fold2 (fun (s, i) c1 c2 ->
+                (("", 0), (first.ToCharArray() |> Seq.ofArray), (second.ToCharArray() |> Seq.ofArray))
+                |||> Seq.fold2 (fun (s, i) c1 c2 ->
                     if c1 = c2 then (s + c1.ToString(), i)
-                    else (s, i + 1)) ("", 0) (second.ToCharArray() |> Seq.ofArray))
+                    else (s, i + 1)) )
             |> Seq.filter (fun (_, i) -> i = 1)
             |> Seq.map (fun (s, _) -> s)
             |> Seq.head
@@ -86,18 +88,19 @@ module Day3 =
         let field : int[,] = Array2D.zeroCreate 1000 1000;
         let set = Set.empty.Add(-1)
         let set = 
-            boxes
-            |> Array.fold (fun set box -> 
+            (set, boxes)
+            ||> Array.fold (fun set box -> 
                 seq { box.X .. (box.X + box.Width - 1)}
                 |> Seq.allPairs (seq { box.Y .. (box.Y + box.Heigth - 1)})
-                |> Seq.fold (fun (set: Set<int>) (x, y) -> 
+                |> Operations.asFirst set
+                ||> Seq.fold (fun set (x, y) -> 
                     if (Array2D.get field x y) = 0 then 
                         (Array2D.set field x y box.Id)
                         set
                     else 
                         let set = set |> Set.add (Array2D.get field x y)
                         (Array2D.set field x y -1)
-                        set |> Set.add box.Id) set) set
+                        set |> Set.add box.Id))
         let count = flat2Darray field
                     |> Seq.countBy (fun i -> i)
                     |> Seq.filter (fun (key, _) -> key = 2)
@@ -207,7 +210,8 @@ module Day5 =
             Char.IsLower(c1) && Char.IsUpper(c2) && c1 = Char.ToLower(c2) || Char.IsUpper(c1) && Char.IsLower(c2) && c1 = Char.ToUpper(c2)
 
         let splitIntoMemories (memory: ReadOnlyMemory<char>) =
-            Seq.unfold (fun (currentSpan: ReadOnlyMemory<char>) ->
+            memory
+            |> Seq.unfold (fun currentSpan ->
                 if currentSpan.Length = 0 then
                     None
                 else
@@ -217,13 +221,14 @@ module Day5 =
                         |> Seq.tryHead
                     match maybeIndex with
                     | Some i -> Some (currentSpan.Slice(0, i), currentSpan.Slice(i + 2))
-                    | None -> Some (currentSpan, ReadOnlyMemory.Empty)) (memory)
+                    | None -> Some (currentSpan, ReadOnlyMemory.Empty))
             |> Seq.filter (fun m -> m.Length > 0)
 
         let iteration listToIterate =
             let mutable flag = false
             let newList = 
-                Seq.unfold (fun (list : ReadOnlyMemory<char> list) ->
+                listToIterate
+                |> Seq.unfold (fun (list : ReadOnlyMemory<char> list) ->
                     match list with
                     | first::second::tail -> 
                         if first.Length > 0 && second.Length > 0 && matchCharCombo (first.Span.Item (first.Length - 1)) (second.Span.Item 0) then
@@ -232,17 +237,18 @@ module Day5 =
                         else
                             Some (first, second::tail)
                     | [ one ] -> Some (one, [])
-                    | [] -> None) listToIterate
+                    | [] -> None)
                 |> Seq.filter (fun m -> m.Length > 0)
                 |> Seq.toList
             newList, flag
 
         let result1 =
-            Seq.unfold (fun (list : ReadOnlyMemory<char> list, flag) ->
+            ((splitIntoMemories inputAsMemory |> Seq.toList), true)
+            |> Seq.unfold (fun (list : ReadOnlyMemory<char> list, flag) ->
                 if flag then
                     let (resList, resFlag) = iteration list
                     Some (resList, (resList, resFlag))
-                else None) ((splitIntoMemories inputAsMemory |> Seq.toList), true)
+                else None) 
             |> Seq.last
             |> Seq.sumBy (fun mem -> mem.Length)
 
@@ -263,11 +269,12 @@ module Day5 =
             seq { 'a' .. 'z' }
             |> Seq.map (fun c -> 
                 let splitted = inputAsMemory |> splitByChar c |> Seq.collect (fun memory -> splitIntoMemories memory) |> Seq.toList
-                Seq.unfold (fun (list : ReadOnlyMemory<char> list, flag) ->
+                (splitted, true)
+                |> Seq.unfold (fun (list, flag) ->
                     if flag then
                         let (resList, resFlag) = iteration list
                         Some (resList, (resList, resFlag))
-                    else None) (splitted, true)
+                    else None)
                 |> Seq.last
                 |> Seq.sumBy (fun mem -> mem.Length))
             |> Seq.min
@@ -418,3 +425,50 @@ module Day7 =
                 queue.Enqueue (currentTime + (int c - int 'A' + 61) , i, c)) current |> ignore 
 
         { First = result1.ToString(); Second = lastTime.ToString() }
+
+module Day8 =
+    open System.Collections.Generic
+
+    type StackNode = { Length: int; NodeCount: int; Start: int; MetadataCount: int; Value: int; Children: int[] }
+    type Integer = int32
+
+    let go() =
+        let input = inputFromResource "AdventOfCode.Inputs._2018.08.txt"
+        let numbers = input.Split(" ") |> Array.map Integer.Parse
+
+        let stack = Stack<StackNode>()
+        stack.Push { Length = 2; NodeCount = numbers.[0]; Start = 0; MetadataCount = numbers.[1]; Value = 0; Children = [| |]}
+        let mutable result1 = 0
+        let mutable result2 = 0
+        while stack.Count > 0 do
+            let current = stack.Pop()
+            if current.NodeCount > 0 then
+                let current = { current with NodeCount = current.NodeCount - 1 }
+                stack.Push current
+                let nextStart = current.Start + current.Length
+                let nextValue = 
+                    if numbers.[nextStart] = 0 then
+                        seq { nextStart + 2 .. nextStart + 1 + numbers.[nextStart + 1]} |> Seq.sumBy (fun i -> numbers.[i])
+                    else
+                        0
+                let next = { Length = 2; NodeCount = numbers.[nextStart]; Start = nextStart; MetadataCount = numbers.[nextStart + 1]; Value = nextValue; Children = [| |]}
+                stack.Push next
+            else
+                let length = current.Length + current.MetadataCount
+                result1 <- result1 + (seq { current.Start + current.Length .. current.Start + length - 1} |> Seq.sumBy (fun i -> numbers.[i]))
+                let currentValue =
+                    if current.Length > 2 then
+                        seq { current.Start + current.Length .. current.Start + length - 1} 
+                        |> Seq.map (fun i -> numbers.[i])
+                        |> Seq.filter (fun i -> i >= 1 && i <= current.Children.Length)
+                        |> Seq.sumBy (fun i -> current.Children.[i - 1])
+                    else
+                        current.Value
+                if stack.Count > 0 then
+                    let previous = stack.Pop()
+                    stack.Push { previous with Length = previous.Length + length; Children = (previous.Children, [| currentValue |]) ||> Array.append }
+                else
+                    result2 <- currentValue
+
+            
+        { First = result1.ToString(); Second = result2.ToString() }
