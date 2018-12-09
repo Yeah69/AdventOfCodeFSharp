@@ -6,6 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Inputs\2018\09.txt" />
     <EmbeddedResource Include="Inputs\2018\08.txt" />
     <EmbeddedResource Include="Inputs\2018\07.txt" />
     <EmbeddedResource Include="Inputs\2018\06.txt" />

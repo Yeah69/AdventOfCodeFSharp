@@ -472,3 +472,71 @@ module Day8 =
 
             
         { First = result1.ToString(); Second = result2.ToString() }
+
+module Day9 =
+    open System.Text.RegularExpressions
+
+    type Integer = int32
+
+    type Node = { Value: int64; mutable Previous: Node option; mutable Next: Node option }
+
+    let go() =
+        let input = inputFromResource "AdventOfCode.Inputs._2018.09.txt"
+        
+        let matchResult = Regex.Match(input, "(\d+) players; last marble is worth (\d+) points")
+
+        let playersCount, lastMarble = Integer.Parse(matchResult.Groups.[1].Value), Integer.Parse(matchResult.Groups.[2].Value)
+
+        let scores = Array.zeroCreate playersCount
+
+        let currentNode = { Value = 0L; Previous = None; Next = None }
+        currentNode.Previous <- Some currentNode
+        currentNode.Next <- Some currentNode
+        
+        let iteration startNode marbleCount scores =
+            Seq.initInfinite (fun i -> i % playersCount)
+            |> Seq.take marbleCount
+            |> Operations.asFirst (startNode, 1)
+            ||> Seq.fold (fun (currentNode, currentMarbleNumber) playerNumber ->
+                if currentMarbleNumber % 23 <> 0 then
+                    match currentNode.Next with
+                    | Some node -> 
+                        let newNode = { Value = int64 currentMarbleNumber; Previous = Some node; Next = node.Next }
+                        node.Next <- Some newNode
+                        newNode.Next 
+                        |> Option.iter (fun node -> node.Previous <- Some newNode)
+                        (newNode, currentMarbleNumber + 1)
+                    | None -> (currentNode, currentMarbleNumber + 1)
+                else
+                    let currentNode = 
+                        (currentNode, seq { 1 .. 7 })
+                        ||> Seq.fold (fun currentNode _ ->
+                            currentNode.Previous |> Option.defaultValue currentNode)
+
+                    (playerNumber, int64 (playerNumber |> Array.get scores) + int64 currentMarbleNumber + currentNode.Value)
+                    ||> Array.set scores
+                    
+                    let next = currentNode.Next
+                    currentNode.Previous 
+                    |> Option.iter (fun node -> node.Next <- next)
+                    
+                    let currentNode = currentNode.Next |> Option.defaultValue currentNode
+
+                    (currentNode, currentMarbleNumber + 1))
+                    
+        let _ = iteration currentNode lastMarble scores
+        
+        let maxScore1 = scores |> Array.max
+
+        let currentNode = { Value= 0L; Previous = None; Next = None }
+        currentNode.Previous <- Some currentNode
+        currentNode.Next <- Some currentNode
+
+        let scores = Array.zeroCreate playersCount
+        
+        let _ = iteration currentNode (lastMarble * 100) scores
+        
+        let maxScore2 = scores |> Array.max
+
+
+        { First = maxScore1.ToString(); Second = maxScore2.ToString() }
