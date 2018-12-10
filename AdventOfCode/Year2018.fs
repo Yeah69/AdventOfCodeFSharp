@@ -5,10 +5,12 @@ open Operations
 
 module Day1 =
     type Integer = int32
+    type String = string
+
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2018.01.txt"
         let frequencyChanges = 
-            input.Split(System.Environment.NewLine)
+            input.Split(System.Environment.NewLine.ToCharArray())
             |> Array.choose (fun line -> 
                 match Integer.TryParse line with
                 | (true, value) -> Some value
@@ -32,7 +34,7 @@ module Day1 =
 module Day2 =
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2018.02.txt"
-        let lines = input.Split(System.Environment.NewLine)
+        let lines = input.Split(System.Environment.NewLine.ToCharArray())
         let (duplesCount, triplesCount) = 
             lines
             |> Seq.ofArray
@@ -74,7 +76,7 @@ module Day3 =
     
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2018.03.txt"
-        let lines = input.Split(System.Environment.NewLine)
+        let lines = input.Split(System.Environment.NewLine.ToCharArray())
         let boxes = lines |> Array.choose (fun line -> 
             let matchResult = Regex.Match(line, "#(\d+) @ (\d+),(\d+): (\d+)x(\d+)")
             match matchResult.Success with
@@ -153,7 +155,7 @@ module Day4 =
 
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2018.04.txt"
-        let lines = input.Split(System.Environment.NewLine)
+        let lines = input.Split(System.Environment.NewLine.ToCharArray())
 
         let minutesOfGuards =
             lines
@@ -290,7 +292,7 @@ module Day6 =
 
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2018.06.txt"
-        let lines = input.Split(System.Environment.NewLine)
+        let lines = input.Split(System.Environment.NewLine.ToCharArray())
         let points = 
             lines 
             |> Array.choose (fun line -> 
@@ -358,7 +360,7 @@ module Day7 =
 
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2018.07.txt"
-        let lines = input.Split(System.Environment.NewLine)
+        let lines = input.Split(System.Environment.NewLine.ToCharArray())
         let instructions = 
             lines 
             |> Array.choose (fun line -> 
@@ -434,7 +436,7 @@ module Day8 =
 
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2018.08.txt"
-        let numbers = input.Split(" ") |> Array.map Integer.Parse
+        let numbers = input.Split(' ') |> Array.map Integer.Parse
 
         let stack = Stack<StackNode>()
         stack.Push { Length = 2; NodeCount = numbers.[0]; Start = 0; MetadataCount = numbers.[1]; Value = 0; Children = [| |]}
@@ -540,3 +542,112 @@ module Day9 =
 
 
         { First = maxScore1.ToString(); Second = maxScore2.ToString() }
+
+module Day10 =
+    open System.Text.RegularExpressions
+    open System.Drawing
+    open System.IO
+
+    open Tesseract
+
+    type Integer = int32
+
+    type String = string
+
+    type Light = { X: int; Y: int; VeloX: int; VeloY: int }
+
+    let flatten (A:'a[,]) = A |> Seq.cast<'a>
+
+    let getColumn c (A:_[,]) =
+        flatten A.[*,c..c] |> Seq.toArray
+
+    let getRow r (A:_[,]) =
+        flatten A.[r..r,*] |> Seq.toArray  
+
+    let go() =
+        let input = inputFromResource "AdventOfCode.Inputs._2018.10.txt"
+        let lines = input.Split(System.Environment.NewLine.ToCharArray())
+        let instructions = 
+            lines 
+            |> Array.choose (fun line -> 
+                let matchResult = Regex.Match(line, "position=<(.*), (.*)> velocity=<(.*), (.*)>")
+                match matchResult.Success with
+                | true -> 
+                    Some ( { X = Integer.Parse(matchResult.Groups.[1].Value.Trim()); 
+                             Y = Integer.Parse(matchResult.Groups.[2].Value.Trim()); 
+                             VeloX = Integer.Parse(matchResult.Groups.[3].Value.Trim()); 
+                             VeloY = Integer.Parse(matchResult.Groups.[4].Value.Trim()) })
+                | false -> None)
+
+        let saveFolder = @"C:\temp\adventofcode\2018\10\"
+
+        let mutable i = 0
+
+        let scaleX = 64
+        let scaleY = 10
+        
+        let minRectangle points =
+            let (minX, _) = points |> Array.minBy (fun (x, _) -> x)
+            let (maxX, _) = points |> Array.maxBy (fun (x, _) -> x)
+            let (_, minY) = points |> Array.minBy (fun (_, y) -> y)
+            let (_, maxY) = points |> Array.maxBy (fun (_, y) -> y)
+            minX, maxX, minY, maxY
+
+        let drawImage points minX minY width height i =
+            use bmp = new Bitmap(scaleX, scaleY)
+            use g = Graphics.FromImage(bmp)
+
+            g.Clear(Color.White)
+
+            points
+            |> Array.iter (fun (x, y) ->
+                let actualX, actualY = int (double (x - minX) * double scaleX / double width), int(double (y - minY) * double scaleY / double height)
+                g.FillRectangle(Brushes.Black, Rectangle(actualX, actualY, 1, 1)))
+
+
+            g.Dispose()
+            
+            let filePath = saveFolder + i.ToString() + ".tiff"
+            //let filePath = System.IO.Path.GetTempFileName() + ".tiff"
+            use stream = new FileStream(filePath, FileMode.Create)
+
+            bmp.Save(stream, Imaging.ImageFormat.Tiff)
+            bmp.Dispose()
+
+            use engine = new TesseractEngine(@"./tessdata", "eng", EngineMode.Default)
+            use img = Pix.LoadFromFile filePath
+            use page = engine.Process img
+            //printfn "%s" (page.GetText())
+            printfn "Confidence: %.4f" (page.GetMeanConfidence())
+            page.GetText()
+
+        let getWidthAndHeight i =
+            let pointsToRender = 
+                instructions 
+                |> Array.map (fun inst -> (inst.X + i * inst.VeloX, inst.Y + i  * inst.VeloY))
+            let (minX, maxX, minY, maxY) =
+                minRectangle pointsToRender
+            let width, height = maxX - minX + 1, maxY - minY + 1
+            width, height
+
+        let drawForIndex i =
+            let pointsToRender = 
+                instructions 
+                |> Array.map (fun inst -> (inst.X + i * inst.VeloX, inst.Y + i  * inst.VeloY))
+            let (minX, maxX, minY, maxY) =
+                minRectangle pointsToRender
+            let width, height = maxX - minX + 1, maxY - minY + 1
+            drawImage pointsToRender minX minY width height i
+        
+        let (_, _, minIndex) =
+            ((Integer.MaxValue, Integer.MaxValue, 0) , seq { 0 .. 20000})
+            ||> Seq.fold (fun (minWidth, minHeight, minIndex) currentIndex ->
+                let currentWidth, currentHeight = getWidthAndHeight currentIndex
+                if currentWidth < minWidth && currentHeight < minHeight then
+                    (currentWidth, currentHeight, currentIndex)
+                else (minWidth, minHeight, minIndex))
+                
+
+        let result = drawForIndex minIndex
+
+        { First = result.ToString(); Second = minIndex.ToString() }
