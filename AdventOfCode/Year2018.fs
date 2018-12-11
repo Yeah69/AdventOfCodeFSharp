@@ -600,14 +600,7 @@ module Day10 =
 
             bmp.Save(stream, Imaging.ImageFormat.Tiff)
             
-
-            //use engine = new TesseractEngine(@"./tessdata", "eng", EngineMode.Default)
-            //use img = Pix.LoadFromFile filePath
-            //use page = engine.Process img
-            //printfn "Confidence: %.4f" (page.GetMeanConfidence())
-            //page.GetText()
-
-            ""
+            System.Diagnostics.Process.Start(filePath) |> ignore
 
         let getWidthAndHeight i =
             let pointsToRender = 
@@ -636,9 +629,9 @@ module Day10 =
                 else (minWidth, minHeight, minIndex))
                 
 
-        let result = drawForIndex minIndex
+        drawForIndex minIndex
 
-        { First = result.ToString(); Second = minIndex.ToString() }
+        { First = "".ToString(); Second = minIndex.ToString() }
 
 module Day11 =
     type Integer = int32
