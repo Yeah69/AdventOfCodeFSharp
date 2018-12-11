@@ -641,7 +641,6 @@ module Day10 =
         { First = result.ToString(); Second = minIndex.ToString() }
 
 module Day11 =
-
     type Integer = int32
 
     let go() =
@@ -661,42 +660,31 @@ module Day11 =
             let step4 = step3 * rackId
             let step5 = (step4 % 1000) / 100
             (x, y, step5 - 5) |||> Array2D.set powerGrid)
+        
+        // https://en.wikipedia.org/wiki/Summed-area_table
+        let summedAreaTable = (300, 300) ||> Array2D.zeroCreate 
 
-        let mutable map = Map.empty |> Map.add 1 powerGrid
-
-        let calculateGrid subSize =
-            let previous = map |> Map.find (subSize - 1)
-            let grid = (301 - subSize, 301 - subSize) ||> Array2D.zeroCreate
-            (seq { 0 .. 300 - subSize }, seq { 0 .. 300 - subSize })
-            ||> Seq.allPairs
-            |> Seq.iter (fun (x, y) ->
-                let value = (x, y) ||> Array2D.get previous
-                let maxY = y + subSize - 1
-                let maxX = x + subSize - 1
-                let totalX = 
-                    seq { x .. x + subSize - 2} 
-                    |> Seq.map (fun x -> (x, maxY) ||> Array2D.get powerGrid)
-                    |> Seq.sum
-                let totalY = 
-                    seq { y .. y + subSize - 1} 
-                    |> Seq.map (fun y -> (maxX, y)||> Array2D.get powerGrid)
-                    |> Seq.sum
-                (x, y, value + totalX + totalY) |||> Array2D.set grid)
-            map <- Map.add subSize grid map
+        seq { 0 .. 299 }
+        |> Seq.iter (fun y ->
+            seq { 0 .. 299 }
+            |> Seq.iter (fun x ->
+                let value = (x, y) ||> Array2D.get powerGrid
+                let above = if y = 0 then 0 else seq { 0 .. y - 1} |> Seq.map (fun y -> (x, y) ||> Array2D.get powerGrid) |> Seq.sum
+                let left = if x = 0 then 0 else (x - 1, y) ||> Array2D.get summedAreaTable
+                (x, y, value + above + left) |||> Array2D.set summedAreaTable))
         
         let calculateMaxTotal subSize =
-            let grid = map |> Map.find subSize
             let (x', y', total) = 
                 (seq { 0 .. 300 - subSize }, seq { 0 .. 300 - subSize })
                 ||> Seq.allPairs
                 |> Seq.map (fun (x, y) -> 
-                    let total = (x, y) ||> Array2D.get grid
-                    (x, y, total))
+                    let topLeft = if x = 0 || y = 0 then 0 else (x - 1, y - 1) ||> Array2D.get summedAreaTable
+                    let bottomRight = (x + subSize - 1, y + subSize - 1) ||> Array2D.get summedAreaTable
+                    let topRight = if x = 0 then 0 else (x - 1, y + subSize - 1) ||> Array2D.get summedAreaTable
+                    let bottomLeft = if y = 0 then 0 else (x + subSize - 1, y - 1) ||> Array2D.get summedAreaTable
+                    x, y, topLeft + bottomRight - topRight - bottomLeft)
                 |> Seq.maxBy (fun (_, _, total) -> total)
             (x' + 1, y' + 1, total)
-
-        seq { 2 .. 300 }
-        |> Seq.iter (fun i -> calculateGrid i)
         
         let (x1, y1, _) = calculateMaxTotal 3
         let result1 = x1.ToString() + "," + y1.ToString()
