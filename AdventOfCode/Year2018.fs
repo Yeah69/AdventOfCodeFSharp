@@ -669,9 +669,10 @@ module Day11 =
             seq { 0 .. 299 }
             |> Seq.iter (fun x ->
                 let value = (x, y) ||> Array2D.get powerGrid
-                let above = if y = 0 then 0 else seq { 0 .. y - 1} |> Seq.map (fun y -> (x, y) ||> Array2D.get powerGrid) |> Seq.sum
+                let above = if y = 0 then 0 else (x, y - 1) ||> Array2D.get summedAreaTable
                 let left = if x = 0 then 0 else (x - 1, y) ||> Array2D.get summedAreaTable
-                (x, y, value + above + left) |||> Array2D.set summedAreaTable))
+                let diagonally = if x = 0 || y = 0 then 0 else (x - 1, y - 1) ||> Array2D.get summedAreaTable
+                (x, y, value + above + left - diagonally) |||> Array2D.set summedAreaTable))
         
         let calculateMaxTotal subSize =
             let (x', y', total) = 
