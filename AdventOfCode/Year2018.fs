@@ -548,21 +548,11 @@ module Day10 =
     open System.Drawing
     open System.IO
 
-    open Tesseract
-
     type Integer = int32
 
     type String = string
 
     type Light = { X: int; Y: int; VeloX: int; VeloY: int }
-
-    let flatten (A:'a[,]) = A |> Seq.cast<'a>
-
-    let getColumn c (A:_[,]) =
-        flatten A.[*,c..c] |> Seq.toArray
-
-    let getRow r (A:_[,]) =
-        flatten A.[r..r,*] |> Seq.toArray  
 
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2018.10.txt"
@@ -581,10 +571,8 @@ module Day10 =
 
         let saveFolder = @"C:\temp\adventofcode\2018\10\"
 
-        let mutable i = 0
-
-        let scaleX = 64
-        let scaleY = 10
+        let scaleX = 640
+        let scaleY = 100
         
         let minRectangle points =
             let (minX, _) = points |> Array.minBy (fun (x, _) -> x)
@@ -602,24 +590,24 @@ module Day10 =
             points
             |> Array.iter (fun (x, y) ->
                 let actualX, actualY = int (double (x - minX) * double scaleX / double width), int(double (y - minY) * double scaleY / double height)
-                g.FillRectangle(Brushes.Black, Rectangle(actualX, actualY, 1, 1)))
+                g.FillRectangle(Brushes.Black, Rectangle(actualX, actualY, 15, 15)))
 
 
             g.Dispose()
             
             let filePath = saveFolder + i.ToString() + ".tiff"
-            //let filePath = System.IO.Path.GetTempFileName() + ".tiff"
             use stream = new FileStream(filePath, FileMode.Create)
 
             bmp.Save(stream, Imaging.ImageFormat.Tiff)
-            bmp.Dispose()
+            
 
-            use engine = new TesseractEngine(@"./tessdata", "eng", EngineMode.Default)
-            use img = Pix.LoadFromFile filePath
-            use page = engine.Process img
-            //printfn "%s" (page.GetText())
-            printfn "Confidence: %.4f" (page.GetMeanConfidence())
-            page.GetText()
+            //use engine = new TesseractEngine(@"./tessdata", "eng", EngineMode.Default)
+            //use img = Pix.LoadFromFile filePath
+            //use page = engine.Process img
+            //printfn "Confidence: %.4f" (page.GetMeanConfidence())
+            //page.GetText()
+
+            ""
 
         let getWidthAndHeight i =
             let pointsToRender = 
@@ -640,7 +628,7 @@ module Day10 =
             drawImage pointsToRender minX minY width height i
         
         let (_, _, minIndex) =
-            ((Integer.MaxValue, Integer.MaxValue, 0) , seq { 0 .. 20000})
+            ((Integer.MaxValue, Integer.MaxValue, 0) , seq { 10000 .. 11000})
             ||> Seq.fold (fun (minWidth, minHeight, minIndex) currentIndex ->
                 let currentWidth, currentHeight = getWidthAndHeight currentIndex
                 if currentWidth < minWidth && currentHeight < minHeight then
@@ -651,3 +639,74 @@ module Day10 =
         let result = drawForIndex minIndex
 
         { First = result.ToString(); Second = minIndex.ToString() }
+
+module Day11 =
+
+    type Integer = int32
+
+    let go() =
+        let input = inputFromResource "AdventOfCode.Inputs._2018.11.txt"
+
+        let serialNumber = Integer.Parse input
+
+        let powerGrid = (300, 300) ||> Array2D.zeroCreate 
+
+        (seq { 0 .. 299 }, seq { 0 .. 299 })
+        ||> Seq.allPairs
+        |> Seq.iter (fun (x, y) ->
+            let x', y' = x + 1, y + 1
+            let rackId = x' + 10
+            let step2 = rackId * y'
+            let step3 = step2 + serialNumber
+            let step4 = step3 * rackId
+            let step5 = (step4 % 1000) / 100
+            (x, y, step5 - 5) |||> Array2D.set powerGrid)
+
+        let mutable map = Map.empty |> Map.add 1 powerGrid
+
+        let calculateGrid subSize =
+            let previous = map |> Map.find (subSize - 1)
+            let grid = (301 - subSize, 301 - subSize) ||> Array2D.zeroCreate
+            (seq { 0 .. 300 - subSize }, seq { 0 .. 300 - subSize })
+            ||> Seq.allPairs
+            |> Seq.iter (fun (x, y) ->
+                let value = (x, y) ||> Array2D.get previous
+                let maxY = y + subSize - 1
+                let maxX = x + subSize - 1
+                let totalX = 
+                    seq { x .. x + subSize - 2} 
+                    |> Seq.map (fun x -> (x, maxY) ||> Array2D.get powerGrid)
+                    |> Seq.sum
+                let totalY = 
+                    seq { y .. y + subSize - 1} 
+                    |> Seq.map (fun y -> (maxX, y)||> Array2D.get powerGrid)
+                    |> Seq.sum
+                (x, y, value + totalX + totalY) |||> Array2D.set grid)
+            map <- Map.add subSize grid map
+        
+        let calculateMaxTotal subSize =
+            let grid = map |> Map.find subSize
+            let (x', y', total) = 
+                (seq { 0 .. 300 - subSize }, seq { 0 .. 300 - subSize })
+                ||> Seq.allPairs
+                |> Seq.map (fun (x, y) -> 
+                    let total = (x, y) ||> Array2D.get grid
+                    (x, y, total))
+                |> Seq.maxBy (fun (_, _, total) -> total)
+            (x' + 1, y' + 1, total)
+
+        seq { 2 .. 300 }
+        |> Seq.iter (fun i -> calculateGrid i)
+        
+        let (x1, y1, _) = calculateMaxTotal 3
+        let result1 = x1.ToString() + "," + y1.ToString()
+
+        let (x2, y2, subSize2, _) =
+            seq { 1 .. 300 }
+            |> Seq.map (fun subSize ->
+                let (x, y, total) = calculateMaxTotal subSize
+                (x, y, subSize, total))
+            |> Seq.maxBy (fun (_, _, _, total) -> total)
+        let result2 = x2.ToString() + "," + y2.ToString() + "," + subSize2.ToString()
+
+        { First = result1; Second = result2.ToString() }
