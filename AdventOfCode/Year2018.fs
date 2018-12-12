@@ -715,33 +715,36 @@ module Day12 =
                 let value = matchResult.Groups.[2].Value.ToCharArray() |> Array.head
                 key, value)
             |> Map.ofSeq
+
+        let iteration currentState = 
+            let (_, firstIndex) = currentState |> Array.head
+            let currentState =
+                ([| '.', firstIndex - 4; '.', firstIndex - 3; '.', firstIndex - 2; '.', firstIndex - 1 |], currentState)
+                ||> Array.append 
+                |> Operations.asSecond [| '.', firstIndex + currentState.Length; '.', firstIndex + currentState.Length + 1; '.', firstIndex + currentState.Length + 2; '.', firstIndex + currentState.Length + 3 |]
+                ||> Array.append 
+            let result = 
+                seq { 2 .. currentState.Length - 3 }
+                |> Seq.map (fun i ->
+                    let currentNeighborhood =
+                        [| currentState.[i - 2] |> fst
+                           currentState.[i - 1] |> fst
+                           currentState.[i] |> fst
+                           currentState.[i + 1] |> fst
+                           currentState.[i + 2] |> fst |]
+                    let currentNeighborhood = new string(currentNeighborhood)
+                    Map.find currentNeighborhood map, currentState.[i] |> snd)
+                |> Seq.skipWhile (fun (c, _) -> c = '.')
+                |> Seq.toArray
+            let lastIndex = result |> Array.findIndexBack (fun (c, _) -> c = '#')
+            let result = result |> Array.take (lastIndex + 1)
+            printfn "%s" (new string(result |> Array.map(fun (c, _) -> c)))
+            result
         
         let afterGenerations generations =
             ((initialState.ToCharArray() |> Array.mapi (fun i c -> c, i)) ,seq { 1 .. generations })
             ||> Seq.fold (fun currentState _ ->
-                let (_, firstIndex) = currentState |> Array.head
-                let currentState =
-                    ([| '.', firstIndex - 4; '.', firstIndex - 3; '.', firstIndex - 2; '.', firstIndex - 1 |], currentState)
-                    ||> Array.append 
-                    |> Operations.asSecond [| '.', firstIndex + currentState.Length; '.', firstIndex + currentState.Length + 1; '.', firstIndex + currentState.Length + 2; '.', firstIndex + currentState.Length + 3 |]
-                    ||> Array.append 
-                let result = 
-                    seq { 2 .. currentState.Length - 3 }
-                    |> Seq.map (fun i ->
-                        let currentNeighborhood =
-                            [| currentState.[i - 2] |> fst
-                               currentState.[i - 1] |> fst
-                               currentState.[i] |> fst
-                               currentState.[i + 1] |> fst
-                               currentState.[i + 2] |> fst |]
-                        let currentNeighborhood = new string(currentNeighborhood)
-                        Map.find currentNeighborhood map, currentState.[i] |> snd)
-                    |> Seq.skipWhile (fun (c, _) -> c = '.')
-                    |> Seq.toArray
-                let lastIndex = result |> Array.findIndexBack (fun (c, _) -> c = '#')
-                let result = result |> Array.take (lastIndex + 1)
-                printfn "%s" (new string(result |> Array.map(fun (c, _) -> c)))
-                result)
+                iteration currentState)
 
         let sumAfter20Generations = 
             afterGenerations 20 
@@ -749,9 +752,21 @@ module Day12 =
             |> Array.map (fun (_, number) -> int64 number)
             |> Array.sum
 
+        let (state, _, i) =
+            ((initialState.ToCharArray() |> Array.mapi (fun i c -> c, i), false, 0) , Seq.initInfinite (fun i -> i + 1))
+            ||> Seq.scan (fun (currentState, _, _) i ->
+                let nextState = iteration currentState
+                let sameStructure = 
+                    (nextState |> Seq.ofArray, currentState |> Seq.ofArray) 
+                    ||> Seq.forall2 (fun (c1, _) (c2, _) -> c1 = c2)
+                (nextState, sameStructure, i))
+            |> Seq.skipWhile (fun (_, b, _) -> not b)
+            |> Seq.head
+
+
         let sumAfter50000000000Generations = 
-            afterGenerations 200 
+            state
             |> Array.filter (fun (c, _) -> c = '#')
-            |> Array.map (fun (_, number) -> int64 number + 50000000000L - 200L)
+            |> Array.map (fun (_, number) -> int64 number + 50000000000L - int64 i)
             |> Array.sum
         { First = sumAfter20Generations.ToString(); Second = sumAfter50000000000Generations.ToString() }
