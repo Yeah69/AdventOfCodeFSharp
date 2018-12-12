@@ -692,3 +692,66 @@ module Day11 =
         let result2 = x2.ToString() + "," + y2.ToString() + "," + subSize2.ToString()
 
         { First = result1; Second = result2.ToString() }
+
+module Day12 =
+    open System.Text.RegularExpressions
+
+    type Integer = int32
+
+    let go() =
+        let input = inputFromResource "AdventOfCode.Inputs._2018.12.txt"
+        let lines = input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+        
+        let matchResult = Regex.Match(lines.[0], "initial state: (.+)")
+        let initialState = matchResult.Groups.[1].Value
+
+        let map =
+            lines
+            |> Seq.ofArray
+            |> Seq.skip 2
+            |> Seq.map (fun line ->
+                let matchResult = Regex.Match(line, "(.+) => (.)")
+                let key = matchResult.Groups.[1].Value
+                let value = matchResult.Groups.[2].Value.ToCharArray() |> Array.head
+                key, value)
+            |> Map.ofSeq
+        
+        let afterGenerations generations =
+            ((initialState.ToCharArray() |> Array.mapi (fun i c -> c, i)) ,seq { 1 .. generations })
+            ||> Seq.fold (fun currentState _ ->
+                let (_, firstIndex) = currentState |> Array.head
+                let currentState =
+                    ([| '.', firstIndex - 4; '.', firstIndex - 3; '.', firstIndex - 2; '.', firstIndex - 1 |], currentState)
+                    ||> Array.append 
+                    |> Operations.asSecond [| '.', firstIndex + currentState.Length; '.', firstIndex + currentState.Length + 1; '.', firstIndex + currentState.Length + 2; '.', firstIndex + currentState.Length + 3 |]
+                    ||> Array.append 
+                let result = 
+                    seq { 2 .. currentState.Length - 3 }
+                    |> Seq.map (fun i ->
+                        let currentNeighborhood =
+                            [| currentState.[i - 2] |> fst
+                               currentState.[i - 1] |> fst
+                               currentState.[i] |> fst
+                               currentState.[i + 1] |> fst
+                               currentState.[i + 2] |> fst |]
+                        let currentNeighborhood = new string(currentNeighborhood)
+                        Map.find currentNeighborhood map, currentState.[i] |> snd)
+                    |> Seq.skipWhile (fun (c, _) -> c = '.')
+                    |> Seq.toArray
+                let lastIndex = result |> Array.findIndexBack (fun (c, _) -> c = '#')
+                let result = result |> Array.take (lastIndex + 1)
+                printfn "%s" (new string(result |> Array.map(fun (c, _) -> c)))
+                result)
+
+        let sumAfter20Generations = 
+            afterGenerations 20 
+            |> Array.filter (fun (c, _) -> c = '#')
+            |> Array.map (fun (_, number) -> int64 number)
+            |> Array.sum
+
+        let sumAfter50000000000Generations = 
+            afterGenerations 200 
+            |> Array.filter (fun (c, _) -> c = '#')
+            |> Array.map (fun (_, number) -> int64 number + 50000000000L - 200L)
+            |> Array.sum
+        { First = sumAfter20Generations.ToString(); Second = sumAfter50000000000Generations.ToString() }
