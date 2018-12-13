@@ -770,3 +770,167 @@ module Day12 =
             |> Array.map (fun (_, number) -> int64 number + 50000000000L - int64 i)
             |> Array.sum
         { First = sumAfter20Generations.ToString(); Second = sumAfter50000000000Generations.ToString() }
+
+module Day13 =
+
+    type Direction = | Up | Down | Right | Left
+
+    type Cart = { Id: int; Position : int*int; Direction : Direction; IntersectionCount : int; Dead : bool }
+
+    let turnLeft prevDirection =
+        match prevDirection with
+        | Up -> Left
+        | Right -> Up
+        | Down -> Right
+        | Left -> Down
+
+    let turnRight prevDirection =
+        match prevDirection with
+        | Up -> Right
+        | Right -> Down
+        | Down -> Left
+        | Left -> Up
+
+    let goStraight prevDirection =
+        prevDirection
+
+    let moveCart curves1 curves2 intersections previousCart =
+        let newPosition =
+            match previousCart.Direction with
+            | Up -> previousCart.Position |> fst, (previousCart.Position |> snd) - 1
+            | Down -> previousCart.Position |> fst, (previousCart.Position |> snd) + 1
+            | Left -> (previousCart.Position |> fst) - 1, previousCart.Position |> snd
+            | Right -> (previousCart.Position |> fst) + 1, previousCart.Position |> snd
+        let newDirection = 
+            if curves1 |> Set.contains newPosition then
+                match previousCart.Direction with
+                | Up -> Right
+                | Down -> Left
+                | Left -> Down
+                | Right -> Up
+            elif curves2 |> Set.contains newPosition then
+                match previousCart.Direction with
+                | Up -> Left
+                | Down -> Right
+                | Left -> Up
+                | Right -> Down
+            elif intersections |> Set.contains newPosition then
+                match previousCart.IntersectionCount % 3 with
+                | 0 -> turnLeft previousCart.Direction
+                | 2 -> turnRight previousCart.Direction
+                | 1 | _ -> goStraight previousCart.Direction
+            else previousCart.Direction
+        let newIntersectionCount =
+            if intersections |> Set.contains newPosition then
+                previousCart.IntersectionCount + 1
+            else previousCart.IntersectionCount
+        { Id = previousCart.Id; Position = newPosition; Direction = newDirection; IntersectionCount = newIntersectionCount; Dead = false}
+
+    let go() =
+        let input = inputFromResource "AdventOfCode.Inputs._2018.13.txt"
+        let lines = input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+
+        let (curves1, curves2, intersections, carts) =
+            lines 
+            |> Seq.ofArray 
+            |> Seq.mapi (fun i line -> i, line)
+            |> Seq.collect (fun (y, line) ->
+                line.ToCharArray()
+                |> Seq.ofArray
+                |> Seq.mapi (fun x c -> (x, y, c)))
+            |> Seq.filter (fun (_, _, c) -> c <> '-' && c <> '|' && c <> ' ')
+            |> Operations.asFirst (Set.empty, Set.empty, Set.empty, Array.empty)
+            ||> Seq.fold (fun (curves1, curves2, intersections, carts) (x, y, c) ->
+                match c with
+                | '/'  -> 
+                    let curves1 = curves1 |> Set.add (x, y)
+                    curves1, curves2, intersections, carts
+                | '\\' -> 
+                    let curves2 = curves2 |> Set.add (x, y)
+                    curves1, curves2, intersections, carts
+                | '+' -> 
+                    let intersections = intersections |> Set.add (x, y)
+                    curves1, curves2, intersections, carts
+                | '^' -> 
+                    let carts = carts |> Array.append [| { Id = carts.Length; Position = (x,y); Direction = Up; IntersectionCount = 0; Dead = false } |]
+                    curves1, curves2, intersections, carts
+                | '<' -> 
+                    let carts = carts |> Array.append [| { Id = carts.Length; Position = (x,y); Direction = Left; IntersectionCount = 0; Dead = false } |]
+                    curves1, curves2, intersections, carts
+                | 'v' -> 
+                    let carts = carts |> Array.append [| { Id = carts.Length; Position = (x,y); Direction = Down; IntersectionCount = 0; Dead = false } |]
+                    curves1, curves2, intersections, carts
+                | '>' -> 
+                    let carts = carts |> Array.append [| { Id = carts.Length; Position = (x,y); Direction = Right; IntersectionCount = 0; Dead = false } |]
+                    curves1, curves2, intersections, carts
+                | _ -> curves1, curves2, intersections, carts)
+
+        let moveCartWithCurrentData = moveCart curves1 curves2 intersections
+        
+        let cartsForFirstTask = carts |> Array.copy
+
+        let (x1,y1) = 
+            Seq.initInfinite (fun i -> i + 1)
+            |> Seq.collect (fun _ -> 
+                cartsForFirstTask
+                |> Seq.ofArray 
+                |> Seq.mapi Operations.asSecond
+                |> Seq.sortWith (fun (x, _) (y, _) -> 
+                    match (x.Position, y.Position) with
+                    | ((x1, y1),(x2, y2)) when y1 < y2 || y1 = y2 && x1 < x2 -> -1
+                    | ((x1, y1),(x2, y2)) when y1 = y2 && x1 = x2 -> 0
+                    | _ -> 1))
+            |> Seq.choose (fun (previousCart, i) ->
+                let newCart = previousCart |> moveCartWithCurrentData
+                let doesCrashHappen = cartsForFirstTask |> Array.exists (fun cart -> cart.Position = newCart.Position)
+                (i, newCart) 
+                ||> Array.set cartsForFirstTask
+                if doesCrashHappen then
+                    Some newCart.Position
+                else
+                    None)
+            |> Seq.head
+        
+        let cartsForSecondTask = carts |> Array.copy
+
+        let (x2,y2) = 
+            Seq.initInfinite (fun i -> i + 1)
+            |> Seq.collect (fun _ -> 
+                cartsForSecondTask 
+                |> Seq.ofArray 
+                |> Seq.mapi Operations.asSecond
+                |> Seq.sortWith (fun (x, _) (y, _) -> 
+                    match (x.Position, y.Position) with
+                    | ((x1, y1),(x2, y2)) when y1 < y2 || y1 = y2 && x1 < x2 -> -1
+                    | ((x1, y1),(x2, y2)) when y1 = y2 && x1 = x2 -> 0
+                    | _ -> 1))
+            |> Seq.choose (fun (previousCart, i) ->
+                if (cartsForSecondTask |> Array.find (fun c -> c.Id = previousCart.Id)).Dead then
+                    None
+                else
+                    let newCart = previousCart |> moveCartWithCurrentData
+                    let maybeCrashHappenedTo = 
+                        cartsForSecondTask 
+                        |> Array.filter (fun cart -> not cart.Dead && cart.Position = newCart.Position)
+                        |> Array.tryHead
+                    match maybeCrashHappenedTo with
+                    | Some cart -> 
+                        let index = cartsForSecondTask |> Array.findIndex (fun c -> c.Id = cart.Id)
+                        (index, { cart with Dead = true }) 
+                        ||> Array.set cartsForSecondTask
+                        (i, { newCart with Dead = true }) 
+                        ||> Array.set cartsForSecondTask
+                    | None ->
+                        (i, newCart) 
+                        ||> Array.set cartsForSecondTask
+                
+                    let remainingCarts = cartsForSecondTask |> Array.filter (fun c -> c.Dead |> not)
+
+                    if remainingCarts.Length = 1 then
+                        let newCart = (remainingCarts |> Array.head) |> moveCartWithCurrentData 
+                        Some newCart.Position
+                    else
+                        None)
+            |> Seq.head
+
+        { First = sprintf "%d,%d" x1 y1; Second = sprintf "%d,%d" x2 y2 }

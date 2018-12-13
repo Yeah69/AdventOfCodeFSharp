@@ -67,6 +67,7 @@
     <EmbeddedResource Include="Inputs\2018\10.txt" />
     <EmbeddedResource Include="Inputs\2018\11.txt" />
     <EmbeddedResource Include="Inputs\2018\12.txt" />
+    <EmbeddedResource Include="Inputs\2018\13.txt" />
     <None Include="App.config" />
     <Content Include="packages.config" />
   </ItemGroup>
