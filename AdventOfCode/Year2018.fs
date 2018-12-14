@@ -934,3 +934,90 @@ module Day13 =
             |> Seq.head
 
         { First = sprintf "%d,%d" x1 y1; Second = sprintf "%d,%d" x2 y2 }
+
+module Day14 =
+    type Integer = int32
+    type String = string
+
+    type Node = { Value: int; mutable Next: Node option}
+
+    let lastNode head node =
+        let mutable current = node
+        while LanguagePrimitives.PhysicalEquality current.Next.Value head |> not do
+            match current.Next with
+            | Some node -> current <- node
+            | None -> current <- current
+        current
+
+    let moveForward i node =
+        (node, seq { 1 .. i })
+        ||> Seq.fold (fun prevNode _ -> prevNode.Next |> Option.defaultValue prevNode)
+
+    let getSolution1 node = 
+        ((node, ""), seq { 1 .. 10 })
+        ||> Seq.fold (fun (prevNode, text) _ -> (prevNode.Next |> Option.defaultValue prevNode, sprintf "%s%d" text prevNode.Value))
+        |> snd
+
+    let go() =
+        let input = inputFromResource "AdventOfCode.Inputs._2018.14.txt"
+        let numberOfRecipes = Integer.Parse input
+
+        let last = { Value = 7; Next = None } 
+        let head = { Value = 3; Next = Some last }
+
+        let lastNodeForCurrentHead = lastNode head
+
+        last.Next <- Some head
+        let count = 2
+        let first = head
+        let second = last
+
+        let mutable result2 = None
+
+        let _ = 
+            (last, first, second, count, "")
+            |> Seq.unfold (fun (last, first, second, count, text) ->
+                if count >= numberOfRecipes + 10 && result2.IsSome then None
+                else
+                    let newRecipe = first.Value + second.Value
+                    let newRecipeAsCharArray = 
+                        (sprintf "%d" newRecipe).ToCharArray() 
+                    let newNodeToAppend = 
+                        newRecipeAsCharArray
+                        |> Seq.ofArray
+                        |> Seq.map string
+                        |> Seq.map Integer.Parse 
+                        |> Seq.rev
+                        |> Operations.asFirst head
+                        ||> Seq.fold (fun prevNode number -> { Value = number; Next = Some prevNode })
+            
+                    last.Next <- Some newNodeToAppend
+
+                    let newCount = count + newRecipeAsCharArray.Length
+                    let newFirst = first |> moveForward (first.Value + 1)
+                    let newSecond = second |> moveForward (second.Value + 1)
+
+                    let newLast = last |> lastNodeForCurrentHead
+
+                    let newText = sprintf "%s%d" text newRecipe
+                    let maybePos = newText.IndexOf input
+                    if maybePos >= 0 && result2.IsNone then 
+                        result2 <- Some (newCount - newText.Length + maybePos)
+                    let newText = 
+                        if newText.Length > input.Length then
+                            newText.Substring(newText.Length - input.Length)
+                        else
+                            newText
+
+                    Some(1, (newLast, newFirst, newSecond, newCount, newText)))
+            |> Seq.last
+
+
+        let result1 =
+            head 
+            |> moveForward numberOfRecipes
+            |> getSolution1
+
+        let result2 = result2 |> Option.defaultValue 0
+
+        { First = result1; Second = sprintf "%d" result2 }
