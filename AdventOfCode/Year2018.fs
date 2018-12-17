@@ -1021,3 +1021,279 @@ module Day14 =
         let result2 = result2 |> Option.defaultValue 0
 
         { First = result1; Second = sprintf "%d" result2 }
+
+module Day15 =
+    type Integer = int32
+    type String = string
+
+    let identity x = x
+
+    type Unit = { Position: int*int; HP: int }
+
+    type Player = | Elve of Unit | Goblin of Unit
+    
+    let unitOfPlayer player = match player with | Elve unit | Goblin unit -> unit
+    
+    let positionOfPlayer player = (player |> unitOfPlayer).Position
+    
+    let hpOfPlayer player = (player |> unitOfPlayer).HP
+    
+    let isGoblin player = match player with | Elve _ -> false | Goblin _ -> true
+    
+    let isElve player = match player with | Elve _ -> true | Goblin _ -> false
+
+    let isAlive player = player |> hpOfPlayer > 0
+
+    let isDead player = player |> isAlive |> not
+
+    let adjacentPositions (x, y) = 
+        seq { yield x, y - 1
+              yield x - 1, y
+              yield x + 1, y
+              yield x, y + 1 } 
+        |> Seq.filter (fun (x,y) -> x >= 0 && x <= 32 && y >= 0 && y <= 32)
+
+    let adjacentFreePositions walls elves goblins position = 
+        position
+        |> adjacentPositions 
+        |> Seq.filter (fun position ->
+            walls |> Set.contains position |> not
+            && elves 
+               |> Seq.ofArray 
+               |> Seq.filter isAlive 
+               |> Seq.map positionOfPlayer 
+               |> Seq.forall (fun pos -> pos <> position)
+            && goblins
+               |> Seq.ofArray 
+               |> Seq.filter isAlive
+               |> Seq.map positionOfPlayer 
+               |> Seq.forall (fun pos -> pos <> position))
+
+    let comparePositions pos1 pos2 =
+        let (x1, y1), (x2, y2) = pos1, pos2
+        if y1 = y2 && x1 = x2 then 0
+        elif y1 < y2 || y1 = y2 && x1 < x2 then -1
+        else 1
+
+    let tryAdjacentEnemy elves goblins player = 
+        let fromEnemies enemies unit =
+            adjacentPositions unit 
+            |> Seq.map (fun position -> enemies |> Array.tryFind (fun enemy -> enemy |> isAlive && enemy |> positionOfPlayer = position))
+            |> Seq.choose identity
+            |> Seq.sortWith (fun player1 player2 ->
+                let hp1, hp2 = player1 |> hpOfPlayer, player2 |> hpOfPlayer
+                if hp1 < hp2 then -1
+                elif hp1 > hp2 then 1
+                else
+                    (player1 |> positionOfPlayer, player2 |> positionOfPlayer)||>comparePositions)
+            |> Seq.tryHead
+        match player with
+        | Elve unit -> unit.Position |> fromEnemies goblins
+        | Goblin unit -> unit.Position |> fromEnemies elves
+
+    let getFieldValues (lines: string[]) =
+        lines 
+        |> Seq.ofArray
+        |> Seq.mapi (fun y line -> y, line)
+        |> Seq.collect (fun (y, line) -> line.ToCharArray() |> Seq.ofArray |> Seq.mapi (fun x c -> x, y, c))
+    
+    let extractWalls getFieldValues =
+        getFieldValues()
+        |> Seq.filter (fun (_, _, c) -> c = '#')
+        |> Seq.map (fun (x, y, _) -> x, y)
+        |> Set.ofSeq
+    
+    let extractElves getFieldValues =
+        getFieldValues()
+        |> Seq.filter (fun (_, _, c) -> c = 'E')
+        |> Seq.map (fun (x, y, _) -> Elve({ Position = x, y; HP = 200 }))
+        |> Array.ofSeq
+    
+    let extractGoblins getFieldValues =
+        getFieldValues()
+        |> Seq.filter (fun (_, _, c) -> c = 'G')
+        |> Seq.map (fun (x, y, _) -> Goblin({ Position = x, y; HP = 200 }))
+        |> Array.ofSeq
+
+    let createTurnOrder elves goblins =
+        elves 
+        |> Seq.ofArray 
+        |> Seq.mapi (fun i _ ->
+            let f() = i |> Array.get elves
+            f)
+        |> Seq.filter (fun f -> f() |> isAlive)
+        |> Seq.append (
+            goblins 
+            |> Seq.ofArray 
+            |> Seq.mapi (fun i _ ->
+                let f() = i |> Array.get goblins
+                f))
+            |> Seq.filter (fun f -> f() |> isAlive)
+        |> Seq.sortWith (fun x' y' -> 
+            (x'() |> positionOfPlayer, y'() |> positionOfPlayer)
+            ||> comparePositions)
+        |> Seq.toArray
+
+    let noParamReturns f = f()
+
+    let attackPlayer player = 
+        match player with 
+        | Elve unit -> Elve { unit with HP = unit.HP - 3 } 
+        | Goblin unit -> Goblin { unit with HP = unit.HP - 3 } 
+
+    let getFloodedMap walls elves goblins position = 
+        let visited = Set.empty |> Set.add position
+
+        (visited, Map.empty, [ position ], 1)
+        |> Seq.unfold (fun (visited, map, lastPositions, step) ->
+            if lastPositions.IsEmpty then
+                None
+            else
+                let nextPositions =
+                    lastPositions 
+                    |> Seq.collect (fun position -> position |> adjacentFreePositions walls elves goblins)
+                    |> Seq.distinct
+                    |> Seq.filter (fun position -> visited |> Set.contains position |> not)
+                    |> Seq.toList
+
+                let map = (map, nextPositions |> Seq.ofList) ||> Seq.fold (fun map position -> map |> Map.add position step)
+                let visited = (visited, nextPositions |> Seq.ofList) ||> Seq.fold (fun visited position -> visited |> Set.add position)
+            
+                Some(map, (visited, map, nextPositions, step + 1)))
+        |> Seq.last
+
+    let getSuitableEnemyPositions walls elves goblins map player = 
+        let enemies = if player |> isElve then goblins else elves
+        enemies 
+        |> Seq.ofArray 
+        |> Seq.filter isAlive
+        |> Seq.collect (fun enemy -> enemy |> positionOfPlayer |> adjacentFreePositions walls elves goblins)
+        |> Seq.distinct
+        |> Seq.filter (fun position -> map |> Map.containsKey position)
+        |> Seq.groupBy (fun position -> map.[position])
+        |> Seq.sortBy (fun (key, _) -> key)
+        |> Seq.map (fun (_, seq) -> seq)
+        |> Seq.tryHead
+        |> Option.defaultValue Seq.empty
+        |> Seq.sortWith comparePositions
+        |> Seq.tryHead
+
+    let retraceToOrigin walls elves goblins (map: Map<int*int, int>) enemyPosition playerPosition =
+        if map.[enemyPosition] = 1 then
+            enemyPosition
+        else
+            let map = getFloodedMap walls elves goblins enemyPosition
+            playerPosition 
+            |> adjacentFreePositions walls elves goblins 
+            |> Seq.filter (fun pos -> map |> Map.containsKey pos)
+            |> Seq.groupBy (fun pos -> map.[pos])
+            |> Seq.sortBy (fun (key, _) -> key)
+            |> Seq.map (fun (_, seq) -> seq |> Seq.sortWith comparePositions |> Seq.head)
+            |> Seq.head
+
+    let movePlayer walls elves goblins player =
+        let maybeAdjacentEnemy = player |> tryAdjacentEnemy elves goblins
+        match maybeAdjacentEnemy with
+        | Some _ -> player
+        | None ->
+            let map = player |> positionOfPlayer |> getFloodedMap walls elves goblins
+            let maybePos = (map, player) ||> getSuitableEnemyPositions walls elves goblins
+            match maybePos with
+            | Some pos -> 
+                let newPosition = (map, pos, player |> positionOfPlayer) |||> retraceToOrigin walls elves goblins
+                match player with
+                | Elve unit -> Elve { unit with Position = newPosition }
+                | Goblin unit -> Goblin { unit with Position = newPosition }
+            | None -> player
+
+    let go() =
+        let input = inputFromResource "AdventOfCode.Inputs._2018.15.txt"
+        let lines = input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+        
+        let getFieldValues() = getFieldValues lines
+
+        let walls = getFieldValues |> extractWalls
+
+        let elves = getFieldValues |> extractElves
+
+        let goblins = getFieldValues |> extractGoblins
+
+        let myTryAdjacentEnemy = tryAdjacentEnemy elves goblins
+
+        let myMovePlayer = movePlayer walls elves goblins
+            
+        let turnOrder = (elves, goblins) ||> createTurnOrder
+
+        let setPlayer oldPlayer newPlayer =
+            if oldPlayer |> isElve then
+                let index = elves |> Array.findIndex (fun elve -> LanguagePrimitives.PhysicalEquality elve oldPlayer)
+                (index, newPlayer) ||> Array.set elves
+            else
+                let index = goblins |> Array.findIndex (fun goblin -> LanguagePrimitives.PhysicalEquality goblin oldPlayer)
+                (index, newPlayer) ||> Array.set goblins
+
+        let renderField i = 
+            let row i (arr: 'T[,]) = arr.[i..i, *] |> Seq.cast<'T>
+            let column i (arr: 'T[,]) = arr.[*, i..i] |> Seq.cast<'T>
+            printfn ""
+            printfn "After round %d" i
+            let field = Array2D.create 7 7 '.'
+            walls |> Set.toSeq |> Seq.iter (fun (x, y) -> (x, y, '#') |||> Array2D.set field)
+            goblins 
+            |> Array.toSeq 
+            |> Seq.filter isAlive
+            |> Seq.iter (fun player -> 
+                let (x, y) = player |> positionOfPlayer
+                (x, y, 'G') |||> Array2D.set field)
+            elves
+            |> Array.toSeq
+            |> Seq.filter isAlive
+            |> Seq.iter (fun player -> 
+                let (x, y) = player |> positionOfPlayer
+                (x, y, 'E') |||> Array2D.set field)
+            seq { 0 .. 6 }
+            |> Seq.iter (fun i -> 
+                let fieldRow = (new string(field |> column i |> Seq.toArray))
+                let seq =
+                    elves |> Seq.ofArray |> Seq.filter isAlive |> Seq.filter (fun elve -> elve |> positionOfPlayer |> snd = i)
+                    |> Seq.append (goblins |> Seq.ofArray |> Seq.filter isAlive |> Seq.filter (fun goblin -> goblin |> positionOfPlayer |> snd = i))
+                    |> Seq.sortBy (fun player -> player |> positionOfPlayer |> fst)
+                    |> Seq.map (fun player -> sprintf "%c(%d)" (if player |> isElve then 'E' else 'G') (player |> hpOfPlayer))
+                let hpState = String.Join(", ", seq)
+                printfn "%s    %s" fieldRow hpState)
+        
+        let lastFullRound =
+            1
+            |> Seq.unfold (fun round ->
+                let allDead() = elves |> Array.forall isDead || goblins |> Array.forall isDead
+                if allDead() then 
+                    None
+                else
+                    let turnOrder = (elves, goblins) ||> createTurnOrder
+                    let mutable didntTurn = false
+                    turnOrder 
+                    |> Seq.ofArray 
+                    |> Seq.filter (fun player -> player() |> isAlive)
+                    |> Seq.iter (fun player ->
+                        let player = player()
+                        if player |> isAlive then
+                            if allDead() then didntTurn <- true
+                            let movedPlayer = player |> myMovePlayer
+                            (player, movedPlayer) ||> setPlayer
+                            match movedPlayer |> myTryAdjacentEnemy with
+                            | Some enemy -> (enemy, enemy |> attackPlayer) ||> setPlayer
+                            | None -> movePlayer |> ignore
+                        else player |> ignore)
+                    //renderField round
+                    if allDead() && didntTurn then 
+                        None
+                    else
+                        Some (round, round + 1))
+            |> Seq.last
+            
+        let sumOfElves = elves |> Array.filter (fun elve -> elve |> hpOfPlayer > 0) |> Array.sumBy hpOfPlayer
+        let sumOfGoblins = goblins |> Array.filter (fun goblin -> goblin |> hpOfPlayer > 0) |> Array.sumBy hpOfPlayer
+
+        let result1 = sprintf "%d" ((lastFullRound - 0) * (sumOfElves + sumOfGoblins))
+
+        { First = result1; Second = sprintf "" }
