@@ -72,6 +72,7 @@ let main _ =
     | Year 2018, Day 15 -> trackDayPerformance(Year2018.Day15.go)
     | Year 2018, Day 16 -> trackDayPerformance(Year2018.Day16.go)
     | Year 2018, Day 17 -> trackDayPerformance(Year2018.Day17.go)
+    | Year 2018, Day 18 -> trackDayPerformance(Year2018.Day18.go)
     | _ -> "" |> ignore
     
     

@@ -10,7 +10,7 @@ module Day1 =
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2018.01.txt"
         let frequencyChanges = 
-            input.Split(System.Environment.NewLine.ToCharArray())
+            input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
             |> Array.choose (fun line -> 
                 match Integer.TryParse line with
                 | (true, value) -> Some value
@@ -34,7 +34,7 @@ module Day1 =
 module Day2 =
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2018.02.txt"
-        let lines = input.Split(System.Environment.NewLine.ToCharArray())
+        let lines = input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
         let (duplesCount, triplesCount) = 
             lines
             |> Seq.ofArray
@@ -76,7 +76,7 @@ module Day3 =
     
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2018.03.txt"
-        let lines = input.Split(System.Environment.NewLine.ToCharArray())
+        let lines = input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
         let boxes = lines |> Array.choose (fun line -> 
             let matchResult = Regex.Match(line, "#(\d+) @ (\d+),(\d+): (\d+)x(\d+)")
             match matchResult.Success with
@@ -155,7 +155,7 @@ module Day4 =
 
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2018.04.txt"
-        let lines = input.Split(System.Environment.NewLine.ToCharArray())
+        let lines = input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
 
         let minutesOfGuards =
             lines
@@ -292,7 +292,7 @@ module Day6 =
 
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2018.06.txt"
-        let lines = input.Split(System.Environment.NewLine.ToCharArray())
+        let lines = input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
         let points = 
             lines 
             |> Array.choose (fun line -> 
@@ -360,7 +360,7 @@ module Day7 =
 
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2018.07.txt"
-        let lines = input.Split(System.Environment.NewLine.ToCharArray())
+        let lines = input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
         let instructions = 
             lines 
             |> Array.choose (fun line -> 
@@ -556,7 +556,7 @@ module Day10 =
 
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2018.10.txt"
-        let lines = input.Split(System.Environment.NewLine.ToCharArray())
+        let lines = input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
         let instructions = 
             lines 
             |> Array.choose (fun line -> 
@@ -1470,7 +1470,6 @@ module Day17 =
 
     open System.Text.RegularExpressions
     open System.Collections.Generic
-    open System.IO
 
     type Integer = int32
 
@@ -1623,4 +1622,86 @@ module Day17 =
 
         { First = result1; Second = result2}
 
+module Day18 =
+
+    let iteration size previous =
+            let next = Array2D.create size size '.'
+            seq { 0 .. size - 1 }
+            |> Seq.allPairs (seq { 0 .. size - 1 })
+            |> Seq.iter (fun (x, y) ->
+                let state = (x, y) ||> Array2D.get previous
+                let countedElements =
+                    seq { (if y = 0 then 0 else y - 1) .. (if y = size - 1 then size - 1 else y + 1) }
+                    |> Seq.allPairs (seq { (if x = 0 then 0 else x - 1) .. (if x = size - 1 then size - 1 else x + 1) })
+                    |> Seq.except (seq { yield (x, y) })
+                    |> Seq.map (fun (x, y) -> (x, y) ||> Array2D.get previous)
+                let newState =
+                    if state = '.' then
+                        let count = countedElements |> Seq.filter (fun e -> e = '|') |> Seq.length
+                        if count >= 3 then '|' else '.'
+                    elif state = '|' then
+                        let count = countedElements |> Seq.filter (fun e -> e = '#') |> Seq.length
+                        if count >= 3 then '#' else '|'
+                    else
+                        let containsLumberyards = countedElements |> Seq.contains '#'
+                        let containsTrees = countedElements |> Seq.contains '|'
+                        if containsLumberyards && containsTrees then '#' else '.'
+                (x, y, newState) |||> Array2D.set next)
+            next
+            
+    let countTiles t size field =
+        seq { 0 .. size - 1 }
+        |> Seq.allPairs (seq { 0 .. size - 1 })
+        |> Operations.asFirst 0
+        ||> Seq.fold (fun count (x, y) -> 
+            let tile = (x, y) ||> Array2D.get field
+            if tile = t then count + 1 else count)
     
+    let go() =
+        let input = inputFromResource "AdventOfCode.Inputs._2018.18.txt"
+        let lines = 
+            input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None) 
+            |> Array.map (fun line -> line.ToCharArray())
+        let size = lines.Length
+
+        let myIteration = iteration size
+
+        let initialField = Array2D.create size size '.'
+        seq { 0 .. size - 1 }
+        |> Seq.allPairs (seq { 0 .. size - 1 })
+        |> Seq.iter (fun (x, y) ->
+            (x, y, lines.[y].[x]) |||> Array2D.set initialField)
+
+        let field1 = 
+            (initialField, seq { 1 .. 10})
+            ||> Seq.fold (fun previous _ -> myIteration previous)
+                
+        let countLumbers1 = (size, field1) ||> countTiles '#'
+        let countTrees1 = (size, field1) ||> countTiles '|'
+
+        let results = 
+            (1, initialField, [], false)
+            |> Seq.unfold (fun (round, previous, previousResults, abort) ->
+                if abort then None
+                else 
+                    let next = myIteration previous
+                    let countLumbers2 = (size, next) ||> countTiles '#'
+                    let countTrees2 = (size, next) ||> countTiles '|'
+                    let res = countLumbers2 * countTrees2
+                    let nextResults = res::previousResults
+                    Some (nextResults, (round + 1, next, nextResults, round = 1000)))
+            |> Seq.last
+            |> List.rev
+            |> List.toArray
+
+        let lastResult = results |> Array.last
+
+        let firstIndex =  (0, (results.Length - 1)) ||> Array.sub results |> Array.findIndexBack (fun res -> res = lastResult)
+
+        let moduloBase = results.Length - firstIndex - 1
+
+        let indexFromStart = (1000000000 - firstIndex - 1) % moduloBase
+
+        let result2 = results.[firstIndex + indexFromStart]
+
+        { First = sprintf "%d" (countLumbers1 * countTrees1); Second = sprintf "%d" result2 }
