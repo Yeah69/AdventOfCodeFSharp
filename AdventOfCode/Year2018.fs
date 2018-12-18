@@ -1305,3 +1305,322 @@ module Day15 =
             |> Seq.head
 
         { First = result1; Second = result2 }
+module Day16 =
+    open System.Text.RegularExpressions
+
+    type Integer = int32
+
+    type Sample = { Before: int[]; Instruction: int*int*int*int; After: int[]}
+
+    let addr (registers: int[]) a b c =
+        let a', b' = registers.[a], registers.[b]
+        (c, a' + b') ||> Array.set registers
+
+    let addi (registers: int[]) a b c =
+        let a' = registers.[a]
+        (c, a' + b) ||> Array.set registers
+
+    let mulr (registers: int[]) a b c =
+        let a', b' = registers.[a], registers.[b]
+        (c, a' * b') ||> Array.set registers
+
+    let muli (registers: int[]) a b c =
+        let a' = registers.[a]
+        (c, a' * b) ||> Array.set registers
+
+    let banr (registers: int[]) a b c =
+        let a', b' = registers.[a], registers.[b]
+        (c, a' &&& b') ||> Array.set registers
+
+    let bani (registers: int[]) a b c =
+        let a' = registers.[a]
+        (c, a' &&& b) ||> Array.set registers
+
+    let borr (registers: int[]) a b c =
+        let a', b' = registers.[a], registers.[b]
+        (c, a' ||| b') ||> Array.set registers
+
+    let bori (registers: int[]) a b c =
+        let a' = registers.[a]
+        (c, a' ||| b) ||> Array.set registers
+
+    let setr (registers: int[]) a _ c =
+        let a' = registers.[a]
+        (c, a') ||> Array.set registers
+
+    let seti (registers: int[]) a _ c =
+        (c, a) ||> Array.set registers
+
+    let gtir (registers: int[]) a b c =
+        let b' = registers.[b]
+        (c, if a > b' then 1 else 0) ||> Array.set registers
+
+    let gtri (registers: int[]) a b c =
+        let a' = registers.[a]
+        (c, if a' > b then 1 else 0) ||> Array.set registers
+
+    let gtrr (registers: int[]) a b c =
+        let a', b' = registers.[a], registers.[b]
+        (c, if a' > b' then 1 else 0) ||> Array.set registers
+
+    let eqir (registers: int[]) a b c =
+        let b' = registers.[b]
+        (c, if a = b' then 1 else 0) ||> Array.set registers
+
+    let eqri (registers: int[]) a b c =
+        let a' = registers.[a]
+        (c, if a' = b then 1 else 0) ||> Array.set registers
+
+    let eqrr (registers: int[]) a b c =
+        let a', b' = registers.[a], registers.[b]
+        (c, if a' = b' then 1 else 0) ||> Array.set registers
+
+    
+    let go() =
+
+        let insts = [| addr; addi; mulr; muli; banr; bani; borr; bori; setr; seti; gtir; gtri; gtrr; eqir; eqri; eqrr |]
+
+        let input_a = inputFromResource "AdventOfCode.Inputs._2018.16_a.txt"
+
+        let matches = Regex.Matches(input_a, "Before: \[(\d+), (\d+), (\d+), (\d+)\](\r\n|\r|\n)(\d+) (\d+) (\d+) (\d+)(\r\n|\r|\n)After:  \[(\d+), (\d+), (\d+), (\d+)\]")
+        
+        let samples =
+            matches
+            |> Seq.cast
+            |> Seq.map (fun (mat: Match) -> 
+                let before = 
+                    [| Integer.Parse mat.Groups.[1].Value
+                       Integer.Parse mat.Groups.[2].Value
+                       Integer.Parse mat.Groups.[3].Value
+                       Integer.Parse mat.Groups.[4].Value |]
+                let inst = Integer.Parse mat.Groups.[6].Value, Integer.Parse mat.Groups.[7].Value, Integer.Parse mat.Groups.[8].Value, Integer.Parse mat.Groups.[9].Value
+                let after = 
+                    [| Integer.Parse mat.Groups.[11].Value
+                       Integer.Parse mat.Groups.[12].Value
+                       Integer.Parse mat.Groups.[13].Value
+                       Integer.Parse mat.Groups.[14].Value |]
+
+                { Before = before; Instruction = inst; After = after })
+            |> Seq.toArray
+
+        let count = 
+            (0, samples |> Seq.ofArray)
+            ||> Seq.fold (fun count sample ->
+                let (matches, _ ) = 
+                    insts |> Array.partition (fun inst ->
+                        let copyOfBefore = sample.Before |> Array.copy
+                        let _, a, b, c = sample.Instruction
+                        (a, b, c) |||> inst copyOfBefore
+                        copyOfBefore |> Array.zip sample.After |> Array.forall (fun (x, y) -> x = y))
+                if matches.Length > 2 then count + 1 else count)
+                
+        let candidates = 
+            samples 
+            |> Seq.ofArray
+            |> Seq.collect (fun sample ->
+                insts
+                |> Seq.ofArray
+                |> Seq.mapi (fun i inst -> i, inst)
+                |> Seq.where (fun (_, inst) ->
+                    let copyOfBefore = sample.Before |> Array.copy
+                    let _, a, b, c = sample.Instruction
+                    (a, b, c) |||> inst copyOfBefore
+                    copyOfBefore |> Array.zip sample.After |> Array.forall (fun (x, y) -> x = y))
+                |> Seq.map (fun (i, _) -> 
+                    let (opcode, _, _, _) = sample.Instruction
+                    opcode, i))
+            |> Seq.groupBy (fun (opcode, _) -> opcode)
+            |> Seq.map (fun (opcode, seq) -> opcode, seq |> Seq.map snd |> Seq.distinct |> Seq.toArray)
+            |> Seq.toArray
+
+        let map = 
+            Map.empty
+            |> Seq.unfold (fun map -> 
+                if seq { 0 .. insts.Length - 1} |> Seq.forall (fun i -> map |> Map.containsKey i) then
+                    None
+                else
+                    let map =
+                        candidates 
+                        |> Seq.filter (fun (opcode, _) -> map |> Map.containsKey opcode |> not)
+                        |> Seq.map (fun (opcode, indeces) -> 
+                            let (filtered, _) = indeces |> Array.partition (fun i -> map |> Map.forall (fun _ index -> index <> i))
+                            opcode, filtered)
+                        |> Seq.filter (fun (_, filtered) -> filtered.Length = 1)
+                        |> Seq.map (fun (opcode, inArray) -> opcode, inArray.[0])
+                        |> Operations.asFirst map
+                        ||> Seq.fold (fun map (opcode, index) -> map |> Map.add opcode index)
+                    Some (map, map))
+            |> Seq.last
+
+        let input_b = inputFromResource "AdventOfCode.Inputs._2018.16_b.txt"
+        let lines = input_b.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+
+        let registers = [| 0; 0; 0; 0 |]
+
+        lines 
+        |> Seq.map (fun line -> 
+            let mat = Regex.Match(line, "(\d+) (\d+) (\d+) (\d+)")
+            Integer.Parse mat.Groups.[1].Value, Integer.Parse mat.Groups.[2].Value, Integer.Parse mat.Groups.[3].Value, Integer.Parse mat.Groups.[4].Value)
+        |> Seq.iter (fun (opcode, a, b, c) ->
+            (a, b, c) |||> insts.[map.[opcode]] registers)
+
+        { First = sprintf "%d" count; Second = sprintf "%d" registers.[0] }
+
+module Day17 =
+
+    open System.Text.RegularExpressions
+    open System.Collections.Generic
+    open System.IO
+
+    type Integer = int32
+
+    type Event = | FlowDown of int*int | BottomHit of int*int
+
+    let isNotEmpty clay resting floating pos =
+       clay |> Set.contains pos || resting |> Set.contains pos || floating |> Set.contains pos
+
+    let isEmpty clay resting floating pos =
+        pos |> isNotEmpty clay resting floating |> not
+
+    let isClayOrResting clay resting pos =
+       clay |> Set.contains pos || resting |> Set.contains pos
+
+    let isClay clay pos =
+       clay |> Set.contains pos
+
+    let isResting resting pos =
+       resting |> Set.contains pos
+
+    let isFloating floating pos =
+       floating |> Set.contains pos
+    
+    let go() =
+
+        let input = inputFromResource "AdventOfCode.Inputs._2018.17.txt"
+
+        let y_lines = Regex.Matches(input, "x=(\d+), y=(\d+)..(\d+)")
+
+        let clay =
+            y_lines
+            |> Seq.cast
+            |> Seq.map (fun (mat: Match) -> 
+                Integer.Parse mat.Groups.[1].Value, Integer.Parse mat.Groups.[2].Value, Integer.Parse mat.Groups.[3].Value)
+            |> Seq.collect (fun (x, y1, y2) -> seq { y1 .. y2 } |> Seq.map (fun y -> x, y))
+            |> Operations.asFirst Set.empty
+            ||> Seq.fold (fun clay point -> clay |> Set.add point)
+
+        let x_lines = Regex.Matches(input, "y=(\d+), x=(\d+)..(\d+)")
+
+        let clay =
+            x_lines
+            |> Seq.cast
+            |> Seq.map (fun (mat: Match) -> 
+                Integer.Parse mat.Groups.[1].Value, Integer.Parse mat.Groups.[2].Value, Integer.Parse mat.Groups.[3].Value)
+            |> Seq.collect (fun (y, x1, x2) -> seq { x1 .. x2 } |> Seq.map (fun x -> x, y))
+            |> Operations.asFirst clay
+            ||> Seq.fold (fun clay point -> clay |> Set.add point)
+        
+        let (minY, maxY) =
+            ((Integer.MaxValue, Integer.MinValue), clay) 
+            ||> Set.fold (fun (minY, maxY) (x, y) ->
+                let minY = if y < minY then y else minY
+                let maxY = if y > maxY then y else maxY
+                minY, maxY)
+
+        let events = new Queue<Event>()
+        let firstEvent = FlowDown(500, 0)
+        events.Enqueue firstEvent
+        
+        let resting, floating = 
+            (Set.empty, Set.empty)
+            |> Seq.unfold(fun (resting, floating) ->
+                if events.Count <= 0 then None
+                else 
+                    let event = events.Dequeue()
+                    match event with
+                    | FlowDown (x, y) ->
+                        let (floating, y) =
+                            if (x, y + 1) |> isEmpty clay resting floating then
+                            
+                                let (floating, y) = 
+                                    (floating, y + 1)
+                                    |> Seq.unfold (fun (floating, y) ->
+                                        if y > maxY || (x, y) |> isNotEmpty clay resting floating then
+                                            None
+                                        else
+                                            let floating = floating |> Set.add (x, y)
+                                            Some ((floating, y), (floating, y + 1)))
+                                    |> Seq.last
+
+                                if y <= maxY && (x, y + 1) |> isClayOrResting clay resting then
+                                    let event = BottomHit(x, y)
+                                    events.Enqueue event
+                                (floating, y)
+                            else (floating, y)
+                
+                        Some ((resting, floating), (resting, floating))
+                    | BottomHit (x, y) -> 
+                        let floating = 
+                            if (x, y) |> isEmpty clay resting floating then floating |> Set.add (x, y) 
+                            else floating
+                        let (floating, xLeft, hitWallLeft) =
+                            (floating, x - 1, false)
+                            |> Seq.unfold (fun (floating, x, abort) ->
+                                if abort then
+                                    None
+                                elif (x, y) |> isClay clay then
+                                    Some ((floating, x, true), (floating, x - 1, true))
+                                elif (x, y + 1) |> isEmpty clay resting floating then
+                                    let floating = floating |> Set.add (x, y)
+                                    Some ((floating, x, false), (floating, x - 1, true))
+                                else
+                                    let floating = floating |> Set.add (x, y)
+                                    Some ((floating, x, false), (floating, x - 1, false)))
+                            |> Seq.last
+                        let (floating, xRight, hitWallRight) =
+                            (floating, x + 1, false)
+                            |> Seq.unfold (fun (floating, x, abort) ->
+                                if abort then
+                                    None
+                                elif (x, y) |> isClay clay then
+                                    Some ((floating, x, true), (floating, x + 1, true))
+                                elif (x, y + 1) |> isEmpty clay resting floating then
+                                    let floating = floating |> Set.add (x, y)
+                                    Some ((floating, x, false), (floating, x + 1, true))
+                                else
+                                    let floating = floating |> Set.add (x, y)
+                                    Some ((floating, x, false), (floating, x + 1, false)))
+                            |> Seq.last
+                        
+                        let resting =
+                            match hitWallLeft, hitWallRight with
+                            | false, false -> 
+                                let event = FlowDown(xLeft, y)
+                                events.Enqueue event
+                                let event = FlowDown(xRight, y)
+                                events.Enqueue event
+                                resting
+                            | true, false -> 
+                                let event = FlowDown(xRight, y)
+                                events.Enqueue event
+                                resting
+                            | false, true -> 
+                                let event = FlowDown(xLeft, y)
+                                events.Enqueue event
+                                resting
+                            | true, true -> 
+                                let event = BottomHit(x, y - 1)
+                                events.Enqueue event
+                                seq { xLeft + 1 .. xRight - 1 }
+                                |> Operations.asFirst resting
+                                ||> Seq.fold (fun resting x -> resting |> Set.add (x, y))
+                
+                        Some ((resting, floating), (resting, floating)))
+            |> Seq.last
+
+        let result1 = sprintf "%d" (resting |> Set.filter (fun (_, y) -> y >= minY && y <= maxY) |> Set.union (floating  |> Set.filter (fun (_, y) -> y >= minY && y <= maxY))).Count
+        let result2 = sprintf "%d" (resting |> Set.filter (fun (_, y) -> y >= minY && y <= maxY)).Count
+
+        { First = result1; Second = result2}
+
+    
