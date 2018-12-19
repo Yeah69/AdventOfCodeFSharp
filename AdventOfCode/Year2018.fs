@@ -1308,73 +1308,11 @@ module Day15 =
 module Day16 =
     open System.Text.RegularExpressions
 
+    open Binary
+
     type Integer = int32
 
     type Sample = { Before: int[]; Instruction: int*int*int*int; After: int[]}
-
-    let addr (registers: int[]) a b c =
-        let a', b' = registers.[a], registers.[b]
-        (c, a' + b') ||> Array.set registers
-
-    let addi (registers: int[]) a b c =
-        let a' = registers.[a]
-        (c, a' + b) ||> Array.set registers
-
-    let mulr (registers: int[]) a b c =
-        let a', b' = registers.[a], registers.[b]
-        (c, a' * b') ||> Array.set registers
-
-    let muli (registers: int[]) a b c =
-        let a' = registers.[a]
-        (c, a' * b) ||> Array.set registers
-
-    let banr (registers: int[]) a b c =
-        let a', b' = registers.[a], registers.[b]
-        (c, a' &&& b') ||> Array.set registers
-
-    let bani (registers: int[]) a b c =
-        let a' = registers.[a]
-        (c, a' &&& b) ||> Array.set registers
-
-    let borr (registers: int[]) a b c =
-        let a', b' = registers.[a], registers.[b]
-        (c, a' ||| b') ||> Array.set registers
-
-    let bori (registers: int[]) a b c =
-        let a' = registers.[a]
-        (c, a' ||| b) ||> Array.set registers
-
-    let setr (registers: int[]) a _ c =
-        let a' = registers.[a]
-        (c, a') ||> Array.set registers
-
-    let seti (registers: int[]) a _ c =
-        (c, a) ||> Array.set registers
-
-    let gtir (registers: int[]) a b c =
-        let b' = registers.[b]
-        (c, if a > b' then 1 else 0) ||> Array.set registers
-
-    let gtri (registers: int[]) a b c =
-        let a' = registers.[a]
-        (c, if a' > b then 1 else 0) ||> Array.set registers
-
-    let gtrr (registers: int[]) a b c =
-        let a', b' = registers.[a], registers.[b]
-        (c, if a' > b' then 1 else 0) ||> Array.set registers
-
-    let eqir (registers: int[]) a b c =
-        let b' = registers.[b]
-        (c, if a = b' then 1 else 0) ||> Array.set registers
-
-    let eqri (registers: int[]) a b c =
-        let a' = registers.[a]
-        (c, if a' = b then 1 else 0) ||> Array.set registers
-
-    let eqrr (registers: int[]) a b c =
-        let a', b' = registers.[a], registers.[b]
-        (c, if a' = b' then 1 else 0) ||> Array.set registers
-
     
     let go() =
 
@@ -1410,7 +1348,7 @@ module Day16 =
                     insts |> Array.partition (fun inst ->
                         let copyOfBefore = sample.Before |> Array.copy
                         let _, a, b, c = sample.Instruction
-                        (a, b, c) |||> inst copyOfBefore
+                        inst a b c copyOfBefore 
                         copyOfBefore |> Array.zip sample.After |> Array.forall (fun (x, y) -> x = y))
                 if matches.Length > 2 then count + 1 else count)
                 
@@ -1424,7 +1362,7 @@ module Day16 =
                 |> Seq.where (fun (_, inst) ->
                     let copyOfBefore = sample.Before |> Array.copy
                     let _, a, b, c = sample.Instruction
-                    (a, b, c) |||> inst copyOfBefore
+                    inst a b c copyOfBefore
                     copyOfBefore |> Array.zip sample.After |> Array.forall (fun (x, y) -> x = y))
                 |> Seq.map (fun (i, _) -> 
                     let (opcode, _, _, _) = sample.Instruction
@@ -1462,7 +1400,7 @@ module Day16 =
             let mat = Regex.Match(line, "(\d+) (\d+) (\d+) (\d+)")
             Integer.Parse mat.Groups.[1].Value, Integer.Parse mat.Groups.[2].Value, Integer.Parse mat.Groups.[3].Value, Integer.Parse mat.Groups.[4].Value)
         |> Seq.iter (fun (opcode, a, b, c) ->
-            (a, b, c) |||> insts.[map.[opcode]] registers)
+            insts.[map.[opcode]] a b c registers)
 
         { First = sprintf "%d" count; Second = sprintf "%d" registers.[0] }
 
