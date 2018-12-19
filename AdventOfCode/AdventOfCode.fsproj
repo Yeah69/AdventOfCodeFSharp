@@ -48,6 +48,7 @@
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Domain.fs" />
     <Compile Include="Operations.fs" />
+    <Compile Include="Binary.fs" />
     <Compile Include="Year2015.fs" />
     <Compile Include="Year2018.fs" />
     <Compile Include="Program.fs" />
@@ -78,6 +79,8 @@
     <EmbeddedResource Include="Inputs\2018\17_0.txt" />
     <EmbeddedResource Include="Inputs\2018\18.txt" />
     <EmbeddedResource Include="Inputs\2018\18_0.txt" />
+    <EmbeddedResource Include="Inputs\2018\19.txt" />
+    <EmbeddedResource Include="Inputs\2018\19_0.txt" />
     <None Include="App.config" />
     <Content Include="packages.config" />
   </ItemGroup>

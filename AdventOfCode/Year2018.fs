@@ -1705,3 +1705,60 @@ module Day18 =
         let result2 = results.[firstIndex + indexFromStart]
 
         { First = sprintf "%d" (countLumbers1 * countTrees1); Second = sprintf "%d" result2 }
+
+module Day19 =
+
+    open Binary
+    open System.Text.RegularExpressions
+
+    type Instruction = { Func: int[] -> int -> int -> int -> unit}
+
+    type Integer = int32
+
+    let identity x = x 
+    
+    let go() =
+        let input = inputFromResource "AdventOfCode.Inputs._2018.19.txt"
+        let lines = 
+            input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+
+        let instIdx = Integer.Parse (lines.[0].Chars 4 |> string)
+
+        let insts =
+            lines
+            |> Seq.ofArray
+            |> Seq.skip 1
+            |> Seq.map (fun line -> 
+                let mat = Regex.Match(line, "(.+) (\d+) (\d+) (\d+)")
+                let opcode, a, b, c = mat.Groups.[1].Value, Integer.Parse mat.Groups.[2].Value, Integer.Parse mat.Groups.[3].Value, Integer.Parse mat.Groups.[4].Value
+                match opcode with
+                | Instruction inst -> Some (inst a b c)
+                | _ -> None)
+            |> Seq.choose identity
+            |> Seq.toArray
+        let doFor (registers: int[]) =
+            let _ =
+                registers.[instIdx]
+                |> Seq.unfold (fun curInst ->
+                    insts.[curInst] registers
+                    (instIdx, registers.[instIdx] + 1) ||> Array.set registers
+                    let nextInst = registers.[instIdx]
+                    if nextInst < 0 || nextInst >= insts.Length then
+                        None
+                    else
+                        Some (1, nextInst))
+                |> Seq.last
+            0
+            
+        let disassemblePart2() =
+            seq { 1 .. 10551418 }
+            |> Seq.map (fun i -> if 10551418 % i = 0 then i else 0)
+            |> Seq.sum
+            
+        let registers1 = Array.zeroCreate 6
+
+        doFor registers1 |> ignore
+
+        let result2 = disassemblePart2()
+
+        { First = sprintf "%d" registers1.[0]; Second = sprintf "%d" result2 }
