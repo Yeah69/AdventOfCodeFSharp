@@ -1700,3 +1700,94 @@ module Day19 =
         let result2 = disassemblePart2()
 
         { First = sprintf "%d" registers1.[0]; Second = sprintf "%d" result2 }
+
+module Day20 =
+
+    open System.Collections.Generic
+    
+    let identity x = x 
+
+    type Node = { 
+        Position: int*int
+        mutable North: Node option 
+        mutable South: Node option 
+        mutable West:  Node option
+        mutable East:  Node option }
+    
+    let go() =
+        let input = inputFromResource "AdventOfCode.Inputs._2018.20.txt"
+        let directions = input.ToCharArray()
+
+        let initialNode = { Position = 0, 0; North = None; South = None; West = None; East = None }
+        let stack = new Stack<Node>()
+        let map = Map.empty |> Map.add initialNode.Position initialNode
+
+        let (_, map) = 
+            ((initialNode, map), directions)
+            ||> Seq.fold (fun (prevNode, map) c ->
+                match c with
+                | 'N' | 'S' | 'W' | 'E' -> 
+                    let newPosition = 
+                        match c with
+                        | 'N' -> prevNode.Position |> fst, (prevNode.Position |> snd) - 1
+                        | 'S' -> prevNode.Position |> fst, (prevNode.Position |> snd) + 1
+                        | 'W' -> (prevNode.Position |> fst) - 1, prevNode.Position |> snd
+                        | 'E' -> (prevNode.Position |> fst) + 1, prevNode.Position |> snd
+                        | _ -> (prevNode.Position |> fst) + 1, prevNode.Position |> snd
+                    let nextNode =
+                        match (newPosition, map) ||> Map.tryFind with
+                        | Some node -> node
+                        | None -> { Position = newPosition; North = None; South = None; West = None; East = None }
+                    let map = map |> Map.add nextNode.Position nextNode
+                    match c with
+                        | 'N' -> prevNode.North <- Some nextNode; nextNode.South <- Some prevNode
+                        | 'S' -> prevNode.South <- Some nextNode; nextNode.North <- Some prevNode
+                        | 'W' -> prevNode.West <- Some nextNode; nextNode.East <- Some prevNode
+                        | 'E' -> prevNode.East <- Some nextNode; nextNode.West <- Some prevNode
+                        | _ -> prevNode.East <- Some nextNode; nextNode.West <- Some prevNode
+                    (nextNode, map)
+                | '(' -> 
+                    stack.Push prevNode
+                    (prevNode, map)
+                | '|' -> 
+                    let nodeToJumpBackTo = stack.Peek()
+                    (nodeToJumpBackTo, map)
+                | ')' -> 
+                    stack.Pop() |> ignore
+                    (prevNode, map)
+                | '^' | '$' | _ ->
+                    (prevNode, map))
+
+        let distanceMap = Map.empty
+        let visited = Set.empty
+        let needVisit = [ initialNode.Position ]
+
+        let distanceMap =
+            (distanceMap, visited, needVisit, 0)
+            |> Seq.unfold (fun (distanceMap, visited, needVisit, currentDistance) ->
+                if needVisit = [] then
+                    None
+                else
+                    let (distanceMap, visited) =
+                        ((distanceMap, visited), needVisit)
+                        ||> Seq.fold (fun (map, set) position ->
+                            map |> Map.add position currentDistance, set |> Set.add position)
+                    let needVisit =
+                        needVisit 
+                        |> Seq.ofList 
+                        |> Seq.collect (fun position -> 
+                            let node = map.[position]
+                            seq { yield node.North; yield node.South; yield node.West; yield node.East })
+                        |> Seq.choose identity
+                        |> Seq.map (fun node -> node.Position)
+                        |> Seq.where (fun position -> visited |> Set.contains position |> not)
+                        |> Seq.distinct
+                        |> Seq.toList
+                    Some (distanceMap, (distanceMap, visited, needVisit, currentDistance + 1)))
+            |> Seq.last
+
+        let result1 = distanceMap |> Map.toSeq |> Seq.map (fun (_, distance) -> distance) |> Seq.max
+
+        let result2 = distanceMap |> Map.toSeq |> Seq.map (fun (_, distance) -> distance) |> Seq.where (fun distance -> distance >= 1000) |> Seq.length
+
+        { First = sprintf "%d" result1; Second = sprintf "%d" result2 }

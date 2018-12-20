@@ -52,6 +52,7 @@
     <Compile Include="Year2015.fs" />
     <Compile Include="Year2018.fs" />
     <Compile Include="Program.fs" />
+    <None Include="Scratchpad.fsx" />
     <EmbeddedResource Include="Inputs\2015\01.txt" />
     <EmbeddedResource Include="Inputs\2015\02.txt" />
     <EmbeddedResource Include="Inputs\2015\03.txt" />
@@ -81,6 +82,12 @@
     <EmbeddedResource Include="Inputs\2018\18_0.txt" />
     <EmbeddedResource Include="Inputs\2018\19.txt" />
     <EmbeddedResource Include="Inputs\2018\19_0.txt" />
+    <EmbeddedResource Include="Inputs\2018\20.txt" />
+    <EmbeddedResource Include="Inputs\2018\20_0.txt" />
+    <EmbeddedResource Include="Inputs\2018\20_1.txt" />
+    <EmbeddedResource Include="Inputs\2018\20_2.txt" />
+    <EmbeddedResource Include="Inputs\2018\20_3.txt" />
+    <EmbeddedResource Include="Inputs\2018\20_4.txt" />
     <None Include="App.config" />
     <Content Include="packages.config" />
   </ItemGroup>
