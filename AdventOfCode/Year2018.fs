@@ -15,21 +15,20 @@ module Day1 =
                 match Integer.TryParse line with
                 | (true, value) -> Some value
                 | _ -> None)
-        
         let result1 = 
             frequencyChanges
             |> Array.sum
         let result2 =
             ((fun i -> Some (frequencyChanges.[i % frequencyChanges.Length] , i + 1)), 0)
             ||> Seq.unfold 
-            |> Seq.scan (fun ((setSoFar: Set<int>), sumSoFar, _) i -> 
+            |> Operations.asFirst (Set.empty, 0, false)
+            ||> Seq.scan (fun (setSoFar, sumSoFar, _) i -> 
                 let sum = sumSoFar + i
-                if setSoFar.Contains sum then setSoFar.Add sum, sum, true
-                else setSoFar.Add sum, sum, false) (Set.empty, 0, false)
+                setSoFar.Add sum, sum, setSoFar.Contains sum)
             |> Seq.filter (fun (_, _, isDuplicate) -> isDuplicate)
             |> Seq.map (fun (_, sum, _) -> sum)
             |> Seq.head
-        { First = result1.ToString(); Second = result2.ToString() }
+        { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day2 =
     let go() =
@@ -43,26 +42,27 @@ module Day2 =
                 let duplicateExists = counts |> Array.exists (fun (_, i) -> i = 2)
                 let triplicateExists = counts |> Array.exists (fun (_, i) -> i = 3)
                 match (duplicateExists, triplicateExists) with
-                | true, true -> (1, 1)
-                | true, false -> (1, 0)
-                | false, true -> (0, 1)
-                | false, false | _ -> (0, 0))
+                | true, true -> 1, 1
+                | true, false -> 1, 0
+                | false, true -> 0, 1
+                | false, false | _ -> 0, 0)
             |> Operations.asFirst (0, 0)
             ||> Seq.fold (fun (currentDuples, currentTriples) (duples, triples) ->
                 (currentDuples + duples, currentTriples + triples))
-        let result = 
+        let result1 = duplesCount * triplesCount
+        let result2 = 
             lines
             |> Seq.ofArray
             |> Seq.allPairs lines
             |> Seq.map (fun (first, second) ->
                 (("", 0), (first.ToCharArray() |> Seq.ofArray), (second.ToCharArray() |> Seq.ofArray))
                 |||> Seq.fold2 (fun (s, i) c1 c2 ->
-                    if c1 = c2 then (s + c1.ToString(), i)
-                    else (s, i + 1)) )
+                    if c1 = c2 then s + c1.ToString(), i
+                    else s, i + 1) )
             |> Seq.filter (fun (_, i) -> i = 1)
             |> Seq.map (fun (s, _) -> s)
             |> Seq.head
-        { First = (duplesCount * triplesCount).ToString(); Second = result }
+        { First = sprintf "%d" result1; Second = result2 }
 
 module Day3 =
     open System.Text.RegularExpressions
@@ -114,7 +114,7 @@ module Day3 =
             |> Seq.filter (fun box -> set.Contains(box.Id) = false) 
             |> Seq.map (fun box -> box.Id) 
             |> Seq.head
-        { First = count.ToString(); Second = id.ToString() }
+        { First = sprintf "%d" count; Second = sprintf "%d" id }
 
 module Day4 =
     
@@ -129,6 +129,8 @@ module Day4 =
         | WakesUp
 
     type Log = { Timestamp: DateTime; Event: Event}
+
+    let identity x = x
 
     let tryParseLog line =
         let matchResult = Regex.Match(line, "\[(\d+)-(\d+)-(\d+) (\d+):(\d+)\] (.*)")
@@ -180,24 +182,26 @@ module Day4 =
 
         let (maxGuard1, _) =
             minutesOfGuards
-            |> Array.countBy (fun (guard, _) -> guard)
-            |> Array.maxBy (fun (_, value) -> value)
+            |> Array.countBy fst
+            |> Array.maxBy snd
             
         let (maxMinute1, _) =
             minutesOfGuards
             |> Seq.ofArray
             |> Seq.filter (fun (guard, _) -> guard = maxGuard1)
-            |> Seq.countBy (fun (_, minute) -> minute)
-            |> Seq.maxBy (fun (_, value) -> value)
+            |> Seq.countBy snd
+            |> Seq.maxBy snd
 
         let ((maxGuard2, maxMinute2), _) =
             minutesOfGuards
             |> Seq.ofArray
-            |> Seq.countBy (fun (guard, minute) -> (guard, minute))
-            |> Seq.maxBy (fun (_, value) -> value)
+            |> Seq.countBy identity
+            |> Seq.maxBy snd
 
+        let result1 = maxGuard1 * maxMinute1
+        let result2 = maxGuard2 * maxMinute2
         
-        { First = (maxGuard1 * maxMinute1).ToString(); Second = (maxGuard2 * maxMinute2).ToString() }
+        { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day5 =
     open System
@@ -1647,33 +1651,19 @@ module Day18 =
 module Day19 =
 
     open Binary
-    open System.Text.RegularExpressions
-
-    type Instruction = { Func: int[] -> int -> int -> int -> unit}
-
-    type Integer = int32
-
-    let identity x = x 
     
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2018.19.txt"
         let lines = 
             input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
 
-        let instIdx = Integer.Parse (lines.[0].Chars 4 |> string)
+        let instIdx = getInstructionPointerIndex lines.[0]
 
         let insts =
             lines
             |> Seq.ofArray
             |> Seq.skip 1
-            |> Seq.map (fun line -> 
-                let mat = Regex.Match(line, "(.+) (\d+) (\d+) (\d+)")
-                let opcode, a, b, c = mat.Groups.[1].Value, Integer.Parse mat.Groups.[2].Value, Integer.Parse mat.Groups.[3].Value, Integer.Parse mat.Groups.[4].Value
-                match opcode with
-                | Instruction inst -> Some (inst a b c)
-                | _ -> None)
-            |> Seq.choose identity
-            |> Seq.toArray
+            |> loadInstructions
         let doFor (registers: int[]) =
             let _ =
                 registers.[instIdx]
@@ -1791,3 +1781,76 @@ module Day20 =
         let result2 = distanceMap |> Map.toSeq |> Seq.map (fun (_, distance) -> distance) |> Seq.where (fun distance -> distance >= 1000) |> Seq.length
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
+
+module Day21 =
+
+    open Binary
+    
+    let go() =
+        let input = inputFromResource "AdventOfCode.Inputs._2018.21.txt"
+        let lines = 
+            input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+
+        let instIdx = getInstructionPointerIndex lines.[0]
+
+        let insts =
+            lines
+            |> Seq.ofArray
+            |> Seq.skip 1
+            |> loadInstructions
+        let doFor (registers: int[]) =
+            let _ =
+                registers.[instIdx]
+                |> Seq.unfold (fun curInst ->
+                    if curInst = 28 then
+                        printfn "%d" registers.[2]
+                    insts.[curInst] registers
+                    (instIdx, registers.[instIdx] + 1) ||> Array.set registers
+                    let nextInst = registers.[instIdx]
+                    if nextInst < 0 || nextInst >= insts.Length then
+                        None
+                    else
+                        Some (1, nextInst))
+                |> Seq.last
+            0
+            
+        let disassemblePart2() =
+            let mutable _0, _1, _2, _3, _5 = 0, 0, 0, 0, 0
+
+            let mutable loop_0 = true 
+            let mutable initialize = true
+            while loop_0 do
+                if initialize then
+                    _5 <- _2 ||| 65536 //(0b10000000000000000; 2^16)
+                    _2 <- 16123384
+                    initialize <- false
+                _3 <- _5 &&& 255 //(0b11111111; 2^8 - 1)
+                _2 <- _2 + _3
+                _2 <- _2 &&& 16777215 //(0b111111111111111111111111; 2^24 - 1)
+                _2 <- _2 * 65899
+                _2 <- _2 &&& 16777215 //(0b111111111111111111111111; 2^24 - 1)
+                if 256 > _5 then
+                    printfn "%d" _2
+                    if _2 = _0 then
+                        loop_0 <- false
+                    else
+                        initialize <- true
+                else
+                    _3 <- 0
+                    let mutable loop_2 = true
+                    while loop_2 do
+                        _1 <- _3 + 1
+                        _1 <- _1 * 256 //(0b100000000; 2^8)
+                        if _1 > _5 then
+                            _5 <- _3
+                            loop_2 <- false
+                        else
+                            _3 <- _3 + 1
+            
+        let registers1 = Array.zeroCreate 6
+
+        //doFor registers1 |> ignore
+
+        let result2 = disassemblePart2()
+
+        { First = sprintf "%d" 12980435; Second = sprintf "%d" 1 }

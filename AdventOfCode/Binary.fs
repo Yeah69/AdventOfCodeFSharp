@@ -1,4 +1,9 @@
 ﻿module Binary
+    open System.Text.RegularExpressions
+
+    type Integer = int32
+
+    let identity x = x
 
     let addr a b c (registers: int[]) =
         let a', b' = registers.[a], registers.[b]
@@ -82,3 +87,16 @@
         | "eqri" -> Some eqri
         | "eqrr" -> Some eqrr
         | _ -> None
+
+    let getInstructionPointerIndex (line:string) = Integer.Parse (line.Chars 4 |> string)
+
+    let loadInstructions lines =
+        lines
+        |> Seq.map (fun line -> 
+            let mat = Regex.Match(line, "(.+) (\d+) (\d+) (\d+)")
+            let opcode, a, b, c = mat.Groups.[1].Value, Integer.Parse mat.Groups.[2].Value, Integer.Parse mat.Groups.[3].Value, Integer.Parse mat.Groups.[4].Value
+            match opcode with
+            | Instruction inst -> Some (inst a b c)
+            | _ -> None)
+        |> Seq.choose identity
+        |> Seq.toArray
