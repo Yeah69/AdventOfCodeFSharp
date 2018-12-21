@@ -1798,59 +1798,66 @@ module Day21 =
             |> Seq.ofArray
             |> Seq.skip 1
             |> loadInstructions
-        let doFor (registers: int[]) =
-            let _ =
-                registers.[instIdx]
-                |> Seq.unfold (fun curInst ->
-                    if curInst = 28 then
-                        printfn "%d" registers.[2]
+        let doForResult1 (registers: int[]) =
+            (registers.[instIdx], false)
+            |> Seq.unfold (fun (curInst, abort) ->
+                if abort then 
+                    None
+                else
                     insts.[curInst] registers
                     (instIdx, registers.[instIdx] + 1) ||> Array.set registers
                     let nextInst = registers.[instIdx]
-                    if nextInst < 0 || nextInst >= insts.Length then
-                        None
+                    Some (registers.[2], (nextInst, nextInst = 28)))
+            |> Seq.last
+
+        let doForResult2 (registers: int[]) =
+            (registers.[instIdx], 0, Set.empty, false)
+            |> Seq.unfold (fun (curInst, last_2, set, abort) ->
+                if abort then 
+                    None
+                else
+                    insts.[curInst] registers
+                    (instIdx, registers.[instIdx] + 1) ||> Array.set registers
+                    let nextInst = registers.[instIdx]
+                    if nextInst = 28 && set |> Set.contains registers.[2] then
+                        Some (last_2, (nextInst, last_2, set, true))
+                    elif nextInst = 28 && set |> Set.contains registers.[2] |> not then
+                        let last_2 = registers.[2]
+                        let set = set |> Set.add last_2
+                        Some (registers.[2], (nextInst, last_2, set, false))
                     else
-                        Some (1, nextInst))
-                |> Seq.last
-            0
+                        Some (registers.[2], (nextInst, last_2, set, false)))
+            |> Seq.last
             
         let disassemblePart2() =
-            let mutable _0, _1, _2, _3, _5 = 0, 0, 0, 0, 0
+            let mutable _2, _5 = 0, 0
 
             let mutable loop_0 = true 
-            let mutable initialize = true
+            let mutable last_2 = 0;
+            let mutable set = Set.empty
+            _5 <- _2 ||| 65536
+            _2 <- 16123384
             while loop_0 do
-                if initialize then
-                    _5 <- _2 ||| 65536 //(0b10000000000000000; 2^16)
-                    _2 <- 16123384
-                    initialize <- false
-                _3 <- _5 &&& 255 //(0b11111111; 2^8 - 1)
-                _2 <- _2 + _3
-                _2 <- _2 &&& 16777215 //(0b111111111111111111111111; 2^24 - 1)
-                _2 <- _2 * 65899
-                _2 <- _2 &&& 16777215 //(0b111111111111111111111111; 2^24 - 1)
+                _2 <- (((_2 + (_5 &&& 255)) &&& 16777215) * 65899) &&& 16777215
                 if 256 > _5 then
-                    printfn "%d" _2
-                    if _2 = _0 then
+                    if set |> Set.contains _2 then
                         loop_0 <- false
                     else
-                        initialize <- true
+                        last_2 <- _2
+                        set <- set |> Set.add _2
+                        _5 <- _2 ||| 65536
+                        _2 <- 16123384
                 else
-                    _3 <- 0
-                    let mutable loop_2 = true
-                    while loop_2 do
-                        _1 <- _3 + 1
-                        _1 <- _1 * 256 //(0b100000000; 2^8)
-                        if _1 > _5 then
-                            _5 <- _3
-                            loop_2 <- false
-                        else
-                            _3 <- _3 + 1
+                    _5 <- _5 / 256
+            last_2
             
         let registers1 = Array.zeroCreate 6
+        let result1 = doForResult1 registers1
+        
+        //let registers2 = Array.zeroCreate 6
+        //let result2 = doForResult2 registers2
 
-        //doFor registers1 |> ignore
-
+        // Same result as doForResult2 would have but much faster
         let result2 = disassemblePart2()
 
-        { First = sprintf "%d" 12980435; Second = sprintf "%d" 1 }
+        { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
