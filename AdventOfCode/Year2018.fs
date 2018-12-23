@@ -1864,52 +1864,157 @@ module Day21 =
 
 module Day22 =
     open System.Text.RegularExpressions
+    open System.Collections.Generic
 
     type Integer = int32
 
+    type Terrain = | Rocky | Wet | Narrow
+
+    type Gadget = | ClimbingGear | Torch | Neither
+
+    type State = { Map : Map<int*int, int>; Queue : Queue<(int*int)*int>; Gadget : Gadget}
+
+    let adjacent' lX lY (x, y) =
+        seq {
+            if x > 0 then yield x - 1, y
+            if y > 0 then yield x, y - 1
+            if x < lX - 1 then yield x + 1, y
+            if y < lY - 1 then yield x, y + 1
+            }
+
+    let filterPositionByValue map position value = (position, map) ||> Map.containsKey |> not || (position, map) ||> Map.find <= value
+
+    let next' lX lY field map position value gadget =
+        position 
+        |> adjacent' lX lY
+        |> Seq.filter (fun position -> 
+            let terrain = position ||> Array2D.get field
+            match gadget, terrain with 
+            | ClimbingGear, Narrow | Torch, Wet | Neither, Rocky -> false
+            | _ -> (map, position, value) |||> filterPositionByValue)
+
+    let nextWithSwitch' lX lY field map position value gadget =
+        position 
+        |> adjacent' lX lY
+        |> Seq.filter (fun position -> 
+            let terrain = position ||> Array2D.get field
+            match gadget, terrain with 
+            | ClimbingGear, Narrow | Torch, Wet | Neither, Rocky -> (map, position, value) |||> filterPositionByValue
+            | _ -> false)
+
     let go() =
-        let input = inputFromResource "AdventOfCode.Inputs._2018.22_0.txt"
+        let input = inputFromResource "AdventOfCode.Inputs._2018.22.txt"
         let matchDepth = Regex.Match(input, "depth: (\d+)")
         let matchTarget = Regex.Match(input, "target: (\d+),(\d+)")
         
         let depth = matchDepth.Groups.[1].Value |> Integer.Parse
-        let depthModulo = depth % 20183
+        let depthModulo = int64 depth % 20183L
         let tX, tY = matchTarget.Groups.[1].Value |> Integer.Parse, matchTarget.Groups.[2].Value |> Integer.Parse
-        let moduloBase = 20183
-        let moduloTypeBase = 3
-        let mulXModulo = 16807 % moduloBase
-        let mulYModulo = 48271 % moduloBase
-        let margin = 20
+        let moduloBase = 20183L
+        let moduloTypeBase = 3L
+        let mulXModulo = 16807L % moduloBase
+        let mulYModulo = 48271L % moduloBase
+        let margin = 1000
         let lX, lY = tX + margin, tY + margin
 
         let field = (lX + 1 , lY + 1) ||> Array2D.zeroCreate
         
         seq { 0 .. lX }
-        |> Seq.iter (fun x -> (x, 0 , (((x * mulXModulo) % moduloBase) + depthModulo) % moduloBase) |||> Array2D.set field)
+        |> Seq.iter (fun x -> (x, 0 , (((int64 x * mulXModulo) % moduloBase) + depthModulo) % moduloBase) |||> Array2D.set field)
         seq { 0 .. lY }
-        |> Seq.iter (fun y -> (0, y , (((y * mulYModulo) % moduloBase) + depthModulo) % moduloBase) |||> Array2D.set field)
+        |> Seq.iter (fun y -> (0, y , (((int64 y * mulYModulo) % moduloBase) + depthModulo) % moduloBase) |||> Array2D.set field)
 
         seq { 1 .. lX }
         |> Seq.iter (fun x -> 
             seq { 1 .. lY }
             |> Seq.iter (fun y ->
                 if x = tX && y = tY then
-                    (x, y, 0) |||> Array2D.set field
+                    (x, y, depthModulo % moduloBase) |||> Array2D.set field
                 else
                     (x, y, ((((x - 1, y) ||> Array2D.get field) * ((x, y - 1) ||> Array2D.get field)) + depthModulo) % moduloBase) |||> Array2D.set field))
             
-        (tX, tY, 0) |||> Array2D.set field
+        //(tX, tY, 0L) |||> Array2D.set field
 
-        let fieldWithTiles = (lX + 1, lY + 1, (fun x y -> ((x, y) ||> Array2D.get field) % moduloTypeBase)) |||> Array2D.init
+        let fieldWithTiles = 
+            (lX + 1, lY + 1,  (fun x y -> 
+                let discriminator = ((x, y) ||> Array2D.get field) % moduloTypeBase
+                match discriminator with
+                | 0L -> Rocky
+                | 1L -> Wet
+                | 2L | _ -> Narrow))
+            |||> Array2D.init
         
         let result1 = 
             (seq { 0 .. tX }, seq { 0 .. tY }) 
             ||> Seq.allPairs
-            |> Seq.map (fun (x, y) -> (x, y) ||> Array2D.get fieldWithTiles)
+            |> Seq.map (fun (x, y) ->
+                let terrain = (x, y) ||> Array2D.get fieldWithTiles
+                match terrain with
+                | Rocky -> 0
+                | Wet -> 1
+                | Narrow -> 2)
             |> Seq.sum
 
+        let next = next' lX lY fieldWithTiles
 
-        { First = sprintf "%d" result1; Second = sprintf "%d" 2 }
+        let nextWithSwitch = nextWithSwitch' lX lY fieldWithTiles
+        
+        let initialState = { Map = Map.empty; Queue = Queue<(int*int)*int>(seq{ yield (0, 0), 0 }); Gadget = Torch}
+
+        let mutable min = Integer.MaxValue
+
+        let queue = Queue<State>(seq {yield initialState})
+        let _ =
+            queue
+            |> Seq.unfold(fun queue ->
+                if queue.Count = 0 then
+                    None
+                else
+                    let state = queue.Dequeue()
+                    let nextSwitchingQueue = Queue<(int*int)*int>()
+                    let map =
+                        state.Map |>
+                        Seq.unfold(fun map -> 
+                            if state.Queue.Count = 0 then 
+                                None
+                            else 
+                                let (position, value) = state.Queue.Dequeue()
+                                match (position, map) ||> Map.tryFind with
+                                | Some foundValue when value >= foundValue -> Some (map, map)
+                                | _ -> 
+                                    let map = (position, value, map) |||> Map.add
+                                    next map position (value + 1) state.Gadget
+                                    |> Seq.iter(fun pos -> state.Queue.Enqueue (pos, value + 1))
+                                    nextWithSwitch map position (value + 8) state.Gadget
+                                    |> Seq.iter(fun pos -> nextSwitchingQueue.Enqueue (pos, value + 8))
+                                    Some (map, map))
+                        |> Seq.last
+                    match ((tX, tY), map) ||> Map.tryFind with
+                    | Some value -> 
+                        let value = 
+                            match state.Gadget with
+                            | Torch -> value
+                            | _ -> value + 7
+                        min <- if value < min then value else min
+                        Some (1, queue)
+                    | None ->
+                        if nextSwitchingQueue.Count = 0 then 
+                            Some (1, queue)
+                        else
+                            match state.Gadget with
+                            | ClimbingGear ->
+                                queue.Enqueue { Map = map; Queue = Queue<(int*int)*int>(nextSwitchingQueue); Gadget = Torch}
+                                queue.Enqueue { Map = map; Queue = Queue<(int*int)*int>(nextSwitchingQueue); Gadget = Neither}
+                            | Torch ->
+                                queue.Enqueue { Map = map; Queue = Queue<(int*int)*int>(nextSwitchingQueue); Gadget = ClimbingGear}
+                                queue.Enqueue { Map = map; Queue = Queue<(int*int)*int>(nextSwitchingQueue); Gadget = Neither}
+                            | Neither ->
+                                queue.Enqueue { Map = map; Queue = Queue<(int*int)*int>(nextSwitchingQueue); Gadget = Torch}
+                                queue.Enqueue { Map = map; Queue = Queue<(int*int)*int>(nextSwitchingQueue); Gadget = ClimbingGear}
+                            Some (1, queue))
+            |> Seq.last
+
+        { First = sprintf "%d" result1; Second = sprintf "%d" min }
 
 module Day23 =
     open System.Text.RegularExpressions
