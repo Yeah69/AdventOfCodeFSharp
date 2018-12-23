@@ -1861,3 +1861,52 @@ module Day21 =
         let result2 = disassemblePart2()
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
+
+module Day22 =
+    open System.Text.RegularExpressions
+
+    type Integer = int32
+
+    let go() =
+        let input = inputFromResource "AdventOfCode.Inputs._2018.22_0.txt"
+        let matchDepth = Regex.Match(input, "depth: (\d+)")
+        let matchTarget = Regex.Match(input, "target: (\d+),(\d+)")
+        
+        let depth = matchDepth.Groups.[1].Value |> Integer.Parse
+        let depthModulo = depth % 20183
+        let tX, tY = matchTarget.Groups.[1].Value |> Integer.Parse, matchTarget.Groups.[2].Value |> Integer.Parse
+        let moduloBase = 20183
+        let moduloTypeBase = 3
+        let mulXModulo = 16807 % moduloBase
+        let mulYModulo = 48271 % moduloBase
+        let margin = 20
+        let lX, lY = tX + margin, tY + margin
+
+        let field = (lX + 1 , lY + 1) ||> Array2D.zeroCreate
+        
+        seq { 0 .. lX }
+        |> Seq.iter (fun x -> (x, 0 , (((x * mulXModulo) % moduloBase) + depthModulo) % moduloBase) |||> Array2D.set field)
+        seq { 0 .. lY }
+        |> Seq.iter (fun y -> (0, y , (((y * mulYModulo) % moduloBase) + depthModulo) % moduloBase) |||> Array2D.set field)
+
+        seq { 1 .. lX }
+        |> Seq.iter (fun x -> 
+            seq { 1 .. lY }
+            |> Seq.iter (fun y ->
+                if x = tX && y = tY then
+                    (x, y, 0) |||> Array2D.set field
+                else
+                    (x, y, ((((x - 1, y) ||> Array2D.get field) * ((x, y - 1) ||> Array2D.get field)) + depthModulo) % moduloBase) |||> Array2D.set field))
+            
+        (tX, tY, 0) |||> Array2D.set field
+
+        let fieldWithTiles = (lX + 1, lY + 1, (fun x y -> ((x, y) ||> Array2D.get field) % moduloTypeBase)) |||> Array2D.init
+        
+        let result1 = 
+            (seq { 0 .. tX }, seq { 0 .. tY }) 
+            ||> Seq.allPairs
+            |> Seq.map (fun (x, y) -> (x, y) ||> Array2D.get fieldWithTiles)
+            |> Seq.sum
+
+
+        { First = sprintf "%d" result1; Second = sprintf "%d" 2 }
