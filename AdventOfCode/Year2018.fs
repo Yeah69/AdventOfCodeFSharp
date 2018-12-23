@@ -1872,7 +1872,7 @@ module Day22 =
 
     type Gadget = | ClimbingGear | Torch | Neither
 
-    type State = { Map : Map<int*int, int>; Queue : Queue<(int*int)*int>; Gadget : Gadget}
+    type State = { Map : Map<int*int, int>; Queue : Queue<(int*int)*int*Gadget>}
 
     let adjacent' lX lY (x, y) =
         seq {
@@ -1882,28 +1882,32 @@ module Day22 =
             if y < lY - 1 then yield x, y + 1
             }
 
-    let filterPositionByValue map position value = (position, map) ||> Map.containsKey |> not || (position, map) ||> Map.find <= value
+    let switchGadget' field prevPos nextPos gadget = 
+        let prevTerrain = prevPos ||> Array2D.get field
+        let nextTerrain = nextPos ||> Array2D.get field
+        match prevTerrain, nextTerrain with
+        | Rocky, Wet -> ClimbingGear
+        | Rocky, Narrow -> Torch
+        | Wet, Rocky -> ClimbingGear
+        | Wet, Narrow -> Neither
+        | Narrow, Rocky -> Torch
+        | Narrow, Wet -> Neither
+        | _ -> gadget
+
+    let filterPositionByValue map position gadget value = (position, map) ||> Map.containsKey |> not || (position, map) ||> Map.find <= value
 
     let next' lX lY field map position value gadget =
         position 
         |> adjacent' lX lY
-        |> Seq.filter (fun position -> 
-            let terrain = position ||> Array2D.get field
-            match gadget, terrain with 
-            | ClimbingGear, Narrow | Torch, Wet | Neither, Rocky -> false
-            | _ -> (map, position, value) |||> filterPositionByValue)
+        |> Seq.map (fun pos -> 
+            let switchedGadget = (position, pos, gadget) |||> switchGadget' field 
+            pos, switchedGadget, if gadget <> switchedGadget then value + 8 else value + 1)
+        |> Seq.filter (fun (position, gadget, value) -> 
+            (position, gadget, value) |||> filterPositionByValue map)
 
-    let nextWithSwitch' lX lY field map position value gadget =
-        position 
-        |> adjacent' lX lY
-        |> Seq.filter (fun position -> 
-            let terrain = position ||> Array2D.get field
-            match gadget, terrain with 
-            | ClimbingGear, Narrow | Torch, Wet | Neither, Rocky -> (map, position, value) |||> filterPositionByValue
-            | _ -> false)
 
     let go() =
-        let input = inputFromResource "AdventOfCode.Inputs._2018.22.txt"
+        let input = inputFromResource "AdventOfCode.Inputs._2018.22_0.txt"
         let matchDepth = Regex.Match(input, "depth: (\d+)")
         let matchTarget = Regex.Match(input, "target: (\d+),(\d+)")
         
@@ -1914,7 +1918,7 @@ module Day22 =
         let moduloTypeBase = 3L
         let mulXModulo = 16807L % moduloBase
         let mulYModulo = 48271L % moduloBase
-        let margin = 1000
+        let margin = 400
         let lX, lY = tX + margin, tY + margin
 
         let field = (lX + 1 , lY + 1) ||> Array2D.zeroCreate
@@ -1933,8 +1937,6 @@ module Day22 =
                 else
                     (x, y, ((((x - 1, y) ||> Array2D.get field) * ((x, y - 1) ||> Array2D.get field)) + depthModulo) % moduloBase) |||> Array2D.set field))
             
-        //(tX, tY, 0L) |||> Array2D.set field
-
         let fieldWithTiles = 
             (lX + 1, lY + 1,  (fun x y -> 
                 let discriminator = ((x, y) ||> Array2D.get field) % moduloTypeBase
@@ -1957,61 +1959,29 @@ module Day22 =
 
         let next = next' lX lY fieldWithTiles
 
-        let nextWithSwitch = nextWithSwitch' lX lY fieldWithTiles
+        let switchGadget = switchGadget' fieldWithTiles
         
-        let initialState = { Map = Map.empty; Queue = Queue<(int*int)*int>(seq{ yield (0, 0), 0 }); Gadget = Torch}
+        let initialState =  Map.empty, Queue<(int*int)*int*Gadget>(seq{ yield (0, 0), 0, Torch })
 
         let mutable min = Integer.MaxValue
 
-        let queue = Queue<State>(seq {yield initialState})
         let _ =
-            queue
-            |> Seq.unfold(fun queue ->
+            initialState
+            |> Seq.unfold(fun (map, queue) ->
                 if queue.Count = 0 then
                     None
                 else
-                    let state = queue.Dequeue()
-                    let nextSwitchingQueue = Queue<(int*int)*int>()
-                    let map =
-                        state.Map |>
-                        Seq.unfold(fun map -> 
-                            if state.Queue.Count = 0 then 
-                                None
-                            else 
-                                let (position, value) = state.Queue.Dequeue()
-                                match (position, map) ||> Map.tryFind with
-                                | Some foundValue when value >= foundValue -> Some (map, map)
-                                | _ -> 
-                                    let map = (position, value, map) |||> Map.add
-                                    next map position (value + 1) state.Gadget
-                                    |> Seq.iter(fun pos -> state.Queue.Enqueue (pos, value + 1))
-                                    nextWithSwitch map position (value + 8) state.Gadget
-                                    |> Seq.iter(fun pos -> nextSwitchingQueue.Enqueue (pos, value + 8))
-                                    Some (map, map))
-                        |> Seq.last
-                    match ((tX, tY), map) ||> Map.tryFind with
-                    | Some value -> 
-                        let value = 
-                            match state.Gadget with
-                            | Torch -> value
-                            | _ -> value + 7
-                        min <- if value < min then value else min
-                        Some (1, queue)
-                    | None ->
-                        if nextSwitchingQueue.Count = 0 then 
-                            Some (1, queue)
-                        else
-                            match state.Gadget with
-                            | ClimbingGear ->
-                                queue.Enqueue { Map = map; Queue = Queue<(int*int)*int>(nextSwitchingQueue); Gadget = Torch}
-                                queue.Enqueue { Map = map; Queue = Queue<(int*int)*int>(nextSwitchingQueue); Gadget = Neither}
-                            | Torch ->
-                                queue.Enqueue { Map = map; Queue = Queue<(int*int)*int>(nextSwitchingQueue); Gadget = ClimbingGear}
-                                queue.Enqueue { Map = map; Queue = Queue<(int*int)*int>(nextSwitchingQueue); Gadget = Neither}
-                            | Neither ->
-                                queue.Enqueue { Map = map; Queue = Queue<(int*int)*int>(nextSwitchingQueue); Gadget = Torch}
-                                queue.Enqueue { Map = map; Queue = Queue<(int*int)*int>(nextSwitchingQueue); Gadget = ClimbingGear}
-                            Some (1, queue))
+                    let (position, value, gadget) = queue.Dequeue()
+                    match (position, map) ||> Map.tryFind with
+                    | Some found when value >= found -> Some(1, (map, queue))
+                    | _ -> 
+                        let map = (position, value, map) |||> Map.add
+                        if position = (tX, tY) then
+                            let value = if gadget <> Torch then value + 7 else value
+                            min <- if value < min then value else min
+                        next map position value gadget
+                        |> Seq.iter(fun (pos, gadget, value) -> queue.Enqueue (pos, value, gadget))
+                        Some(1, (map, queue)))
             |> Seq.last
 
         { First = sprintf "%d" result1; Second = sprintf "%d" min }
