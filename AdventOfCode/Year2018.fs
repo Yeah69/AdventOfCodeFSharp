@@ -1910,3 +1910,45 @@ module Day22 =
 
 
         { First = sprintf "%d" result1; Second = sprintf "%d" 2 }
+
+module Day23 =
+    open System.Text.RegularExpressions
+    open System
+
+    type Integer = int32
+
+    type Nanobot = { Position : int*int*int; Radius : int}
+
+    let getRadius nanobot = nanobot.Radius
+
+    let inRadiusOf referenceNanobot nanobot =
+        let refX, refY, refZ = referenceNanobot.Position
+        let x, y, z = nanobot.Position
+        let distance = Math.Abs(refX - x) + Math.Abs(refY - y) + Math.Abs(refZ - z)
+        distance <= referenceNanobot.Radius
+
+    let go() =
+        let input = inputFromResource "AdventOfCode.Inputs._2018.23.txt"
+        let matches = Regex.Matches(input, "pos=<(.+),(.+),(.+)>, r=(\d+)")
+
+        let bots =
+            matches
+            |> Seq.cast
+            |> Seq.map (fun (data : Match) -> 
+                let position = Integer.Parse data.Groups.[1].Value, Integer.Parse data.Groups.[2].Value, Integer.Parse data.Groups.[3].Value
+                let radius = Integer.Parse data.Groups.[4].Value
+                { Position = position; Radius = radius})
+            |> Seq.toArray
+
+        let maxNanobot =
+            bots
+            |> Seq.ofArray
+            |> Seq.maxBy getRadius
+
+        let result1 =
+            bots
+            |> Seq.ofArray
+            |> Seq.filter (inRadiusOf maxNanobot)
+            |> Seq.length
+
+        { First = sprintf "%d" result1; Second = sprintf "%d" 2 }
