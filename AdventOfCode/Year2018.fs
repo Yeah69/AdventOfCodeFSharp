@@ -1864,7 +1864,8 @@ module Day21 =
 
 module Day22 =
     open System.Text.RegularExpressions
-    open System.Collections.Generic
+    open FSharpx.Collections
+    open System
 
     type Integer = int32
 
@@ -1872,7 +1873,31 @@ module Day22 =
 
     type Gadget = | ClimbingGear | Torch | Neither
 
-    type State = { Map : Map<int*int, int>; Queue : Queue<(int*int)*int*Gadget>}
+    [<CustomEquality;CustomComparison>]
+    type Step = { TargetPosition: int*int; Value: int; Gadget: Gadget } with
+        interface IComparable with
+            member this.CompareTo other =
+                match other with
+                | :? Step as other ->
+                    if this.Value > other.Value then 1
+                    elif this.Value = other.Value then 0
+                    else -1
+                | _ -> -1
+        interface IComparable<Step> with
+            member this.CompareTo other =
+                if this.Value > other.Value then 1
+                elif this.Value = other.Value then 0
+                else -1
+        interface IEquatable<Step> with
+            member this.Equals other =
+                this.TargetPosition = other.TargetPosition && this.Value = other.Value && this.Gadget = other.Gadget
+        override this.Equals other =
+            match other with
+                | :? Step as other ->
+                    this.TargetPosition = other.TargetPosition && this.Value = other.Value && this.Gadget = other.Gadget
+                | _ -> false
+        override this.GetHashCode() =
+            this.Value * 17 + (this.TargetPosition |> fst) * 17 + (this.TargetPosition |> snd) * 17
 
     let adjacent' lX lY (x, y) =
         seq {
@@ -1894,39 +1919,48 @@ module Day22 =
         | Narrow, Wet -> Neither
         | _ -> gadget
 
-    let filterPositionByValue map position gadget value = (position, map) ||> Map.containsKey |> not || (position, map) ||> Map.find <= value
+    let otherGadget terrain gadget =
+        match terrain, gadget with
+        | Rocky, ClimbingGear -> Torch
+        | Rocky, Torch -> ClimbingGear
+        | Wet, ClimbingGear -> Neither
+        | Wet, Neither -> ClimbingGear
+        | Narrow, Torch -> Neither
+        | Narrow, Neither -> Torch
+        | _ -> gadget
 
-    let next' lX lY field map position value gadget =
+    let next' lX lY field targetPosition map position value gadget =
         position 
         |> adjacent' lX lY
         |> Seq.map (fun pos -> 
-            let switchedGadget = (position, pos, gadget) |||> switchGadget' field 
-            pos, switchedGadget, if gadget <> switchedGadget then value + 8 else value + 1)
+            let switchedGadget = (position, pos, gadget) |||> switchGadget' field
+            let value = if gadget <> switchedGadget then value + 8 else value + 1
+            let value = if pos = targetPosition && switchedGadget <> Torch then value + 7 else value
+            pos, switchedGadget, value)
         |> Seq.filter (fun (position, gadget, value) -> 
-            (position, gadget, value) |||> filterPositionByValue map)
-
+            ((position, gadget), map) ||> Map.containsKey |> not || ((position, gadget), map) ||> Map.find > value)
 
     let go() =
-        let input = inputFromResource "AdventOfCode.Inputs._2018.22_0.txt"
+        let input = inputFromResource "AdventOfCode.Inputs._2018.22.txt"
         let matchDepth = Regex.Match(input, "depth: (\d+)")
         let matchTarget = Regex.Match(input, "target: (\d+),(\d+)")
         
         let depth = matchDepth.Groups.[1].Value |> Integer.Parse
-        let depthModulo = int64 depth % 20183L
+        let depthModulo = depth % 20183
         let tX, tY = matchTarget.Groups.[1].Value |> Integer.Parse, matchTarget.Groups.[2].Value |> Integer.Parse
-        let moduloBase = 20183L
-        let moduloTypeBase = 3L
-        let mulXModulo = 16807L % moduloBase
-        let mulYModulo = 48271L % moduloBase
-        let margin = 400
+        let moduloBase = 20183
+        let moduloTypeBase = 3
+        let mulXModulo = 16807 % moduloBase
+        let mulYModulo = 48271 % moduloBase
+        let margin = 15
         let lX, lY = tX + margin, tY + margin
 
         let field = (lX + 1 , lY + 1) ||> Array2D.zeroCreate
         
         seq { 0 .. lX }
-        |> Seq.iter (fun x -> (x, 0 , (((int64 x * mulXModulo) % moduloBase) + depthModulo) % moduloBase) |||> Array2D.set field)
+        |> Seq.iter (fun x -> (x, 0 , (((x * mulXModulo) % moduloBase) + depthModulo) % moduloBase) |||> Array2D.set field)
         seq { 0 .. lY }
-        |> Seq.iter (fun y -> (0, y , (((int64 y * mulYModulo) % moduloBase) + depthModulo) % moduloBase) |||> Array2D.set field)
+        |> Seq.iter (fun y -> (0, y , (((y * mulYModulo) % moduloBase) + depthModulo) % moduloBase) |||> Array2D.set field)
 
         seq { 1 .. lX }
         |> Seq.iter (fun x -> 
@@ -1941,9 +1975,9 @@ module Day22 =
             (lX + 1, lY + 1,  (fun x y -> 
                 let discriminator = ((x, y) ||> Array2D.get field) % moduloTypeBase
                 match discriminator with
-                | 0L -> Rocky
-                | 1L -> Wet
-                | 2L | _ -> Narrow))
+                | 0 -> Rocky
+                | 1 -> Wet
+                | 2 | _ -> Narrow))
             |||> Array2D.init
         
         let result1 = 
@@ -1957,34 +1991,30 @@ module Day22 =
                 | Narrow -> 2)
             |> Seq.sum
 
-        let next = next' lX lY fieldWithTiles
+        let next = next' lX lY fieldWithTiles (tX, tY)
+        let queue = PriorityQueue.empty false |> PriorityQueue.insert ({ TargetPosition = (0, 0); Value = 0; Gadget = Torch })
+        let initialState = Integer.MaxValue, Map.empty, queue
 
-        let switchGadget = switchGadget' fieldWithTiles
-        
-        let initialState =  Map.empty, Queue<(int*int)*int*Gadget>(seq{ yield (0, 0), 0, Torch })
-
-        let mutable min = Integer.MaxValue
-
-        let _ =
+        let result2 =
             initialState
-            |> Seq.unfold(fun (map, queue) ->
-                if queue.Count = 0 then
+            |> Seq.unfold(fun (currentMin, map, queue) ->
+                if queue |> PriorityQueue.isEmpty then
                     None
                 else
-                    let (position, value, gadget) = queue.Dequeue()
-                    match (position, map) ||> Map.tryFind with
-                    | Some found when value >= found -> Some(1, (map, queue))
+                    let (step, queue) = queue |> PriorityQueue.pop
+                    match ((step.TargetPosition, step.Gadget), map) ||> Map.tryFind with
+                    | Some found when step.Value >= found -> Some(currentMin, (currentMin, map, queue))
                     | _ -> 
-                        let map = (position, value, map) |||> Map.add
-                        if position = (tX, tY) then
-                            let value = if gadget <> Torch then value + 7 else value
-                            min <- if value < min then value else min
-                        next map position value gadget
-                        |> Seq.iter(fun (pos, gadget, value) -> queue.Enqueue (pos, value, gadget))
-                        Some(1, (map, queue)))
+                        let map = ((step.TargetPosition, step.Gadget), step.Value, map) |||> Map.add
+                        let currentMin = if step.TargetPosition = (tX, tY) && step.Value < currentMin then step.Value else currentMin
+                        let queue = 
+                            (queue, next map step.TargetPosition step.Value step.Gadget)
+                            ||> Seq.fold(fun queue (pos, gadget, value) -> 
+                                queue |> PriorityQueue.insert {TargetPosition = pos; Value = value; Gadget = gadget })
+                        Some(currentMin, (currentMin, map, queue)))
             |> Seq.last
 
-        { First = sprintf "%d" result1; Second = sprintf "%d" min }
+        { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day23 =
     open System.Text.RegularExpressions
