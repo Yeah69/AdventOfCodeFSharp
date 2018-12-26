@@ -93,6 +93,12 @@
     <EmbeddedResource Include="Inputs\2018\22_0.txt" />
     <EmbeddedResource Include="Inputs\2018\23.txt" />
     <EmbeddedResource Include="Inputs\2018\23_0.txt" />
+    <EmbeddedResource Include="Inputs\2018\23_1.txt" />
+    <EmbeddedResource Include="Inputs\2018\24_ImmuneSystem.txt" />
+    <EmbeddedResource Include="Inputs\2018\24_Infection.txt" />
+    <EmbeddedResource Include="Inputs\2018\24_ImmuneSystem_0.txt" />
+    <EmbeddedResource Include="Inputs\2018\24_Infection_0.txt" />
+    <EmbeddedResource Include="Inputs\2018\25.txt" />
     <None Include="App.config" />
     <Content Include="packages.config" />
   </ItemGroup>

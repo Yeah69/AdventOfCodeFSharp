@@ -2024,13 +2024,32 @@ module Day23 =
 
     type Nanobot = { Position : int*int*int; Radius : int}
 
+    type SetAction = | Add | Remove
+
+    let identity x = x
+
     let getRadius nanobot = nanobot.Radius
 
-    let inRadiusOf referenceNanobot nanobot =
-        let refX, refY, refZ = referenceNanobot.Position
-        let x, y, z = nanobot.Position
-        let distance = Math.Abs(refX - x) + Math.Abs(refY - y) + Math.Abs(refZ - z)
-        distance <= referenceNanobot.Radius
+    let getPosition nanobot = nanobot.Position
+
+    let getX nanobot = 
+        let (x, _, _) = nanobot.Position
+        x
+
+    let getY nanobot = 
+        let (_, y, _) = nanobot.Position
+        y
+
+    let getZ nanobot = 
+        let (_, _, z) = nanobot.Position
+        z
+
+    let manHatDist (x1:int, y1:int, z1:int) (x2, y2, z2) =
+        Math.Abs(int64 x1 - int64 x2) + Math.Abs(int64 y1 - int64 y2) + Math.Abs(int64 z1 - int64 z2)
+
+    let inRadiusOf referenceNanobot (x, y, z) =
+        let distance = manHatDist referenceNanobot.Position (x, y, z)
+        distance <= int64 referenceNanobot.Radius
 
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2018.23.txt"
@@ -2045,15 +2064,134 @@ module Day23 =
                 { Position = position; Radius = radius})
             |> Seq.toArray
 
-        let maxNanobot =
+        let maxRadiusNanobot =
             bots
             |> Seq.ofArray
             |> Seq.maxBy getRadius
 
+        let inRadiusOfMaxRadiusNanobot = inRadiusOf maxRadiusNanobot
+
         let result1 =
             bots
             |> Seq.ofArray
-            |> Seq.filter (inRadiusOf maxNanobot)
+            |> Seq.filter (fun bot -> bot.Position |> inRadiusOfMaxRadiusNanobot)
             |> Seq.length
+        
+        let (bot1, bot2, pos) =
+            bots 
+            |> Seq.ofArray 
+            |> Seq.allPairs (bots |> Seq.ofArray)
+            |> Seq.filter (fun (bot1, bot2) -> (bot1 |> getPosition) <> (bot2 |> getPosition))
+            |> Seq.filter (fun (bot1, bot2) -> (bot1.Position, bot2.Position) ||> manHatDist <= int64 (bot1.Radius + bot2.Radius))
+            |> Seq.map (fun (bot1, bot2) ->
+                let diff = double (int64 (bot1.Radius + bot2.Radius) - ((bot1.Position, bot2.Position) ||> manHatDist)) / 2.
+                let factor = double bot1.Radius - diff
+                let x', y', z' = double ((bot2 |> getX) - (bot1 |> getX)), double ((bot2 |> getY) - (bot1 |> getY)), double ((bot2 |> getZ) - (bot1 |> getZ))
+                let sum = x' + y' + z'
+                let x, y, z = int32 (Math.Round(x' / sum * factor)), int32 (Math.Round(y' / sum * factor)), int32 (Math.Round(z' / sum * factor))
+                bot1, bot2, (bot1 |> getX) + x, (bot1 |> getY) + y, (bot1 |> getZ) + z)
+            |> Seq.map (fun (bot1, bot2, x, y, z) ->
+                let pos = x, y, z
+                bot1, bot2, pos, bots |> Seq.ofArray |> Seq.filter (fun bot -> pos |> inRadiusOf bot) |> Seq.length)
+            |> Seq.filter (fun (_, _, _, count) -> count = 1000)
+            |> Seq.map (fun (bot1, bot2, pos, _) -> bot1, bot2, pos)
+            |> Seq.minBy (fun (_, _, pos) -> (pos, (0, 0, 0)) ||> manHatDist)
+        let (x, y, z) = pos
+        let length = bots |> Seq.ofArray |> Seq.filter (fun bot -> pos |> inRadiusOf bot) |> Seq.length
+        let dist = (0, 0, 0) |> manHatDist pos
+        printfn "Distance %d" dist
+        // 852 / 3
+        //let minSetSize =
+        //    bots
+        //    |> Seq.ofArray
+        //    |> Seq.allPairs (bots |> Seq.ofArray)
+        //    |> Seq.map (fun (bot, refBot) ->
+        //        bot, bot.Position |> inRadiusOf refBot)
+        //    |> Seq.filter snd
+        //    |> Seq.map fst
+        //    |> Seq.countBy identity
+        //    |> Seq.maxBy snd
+        //    |> snd
 
-        { First = sprintf "%d" result1; Second = sprintf "%d" 2 }
+        //let getSets getCoordinate =
+        //    bots 
+        //    |> Seq.ofArray
+        //    |> Seq.mapi (fun i bot -> bot, i)
+        //    |> Seq.collect (fun (bot, i) -> seq {
+        //        yield i, Add, getCoordinate bot - (bot |> getRadius)
+        //        yield i, Remove, getCoordinate bot + (bot |> getRadius) })
+        //    |> Seq.groupBy (fun (_, _, x) -> x)
+        //    |> Seq.sortBy (fun (x, _) -> x)
+        //    |> Seq.append (seq { yield Integer.MaxValue, Seq.empty})
+        //    |> Seq.pairwise
+        //    |> Seq.map (fun ((x1, actions), (x2, _)) -> actions, x1, x2)
+        //    |> Operations.asFirst (Set.empty, Integer.MinValue, Integer.MinValue)
+        //    ||> Seq.scan (fun (set, _, _) (actions, x1, x2) ->
+        //        let set = 
+        //            (set, actions)
+        //            ||> Seq.fold (fun set action ->
+        //                let nanobot, action, _ = action
+        //                match action with
+        //                | Add -> set |> Set.add nanobot
+        //                | Remove -> set |> Set.remove nanobot)
+        //        set, x1, x2)
+        //    |> Seq.filter (fun (set, _, _) -> set |> Set.count >= 981)
+        //    |> Seq.toArray
+            
+        //let setsOfX = getSets getX
+        //let setsOfY = getSets getY
+        //let setsOfZ = getSets getZ
+
+        ////let mergeXAndY = 
+        ////    setsOfX 
+        ////    |> Seq.ofArray 
+        ////    |> Seq.allPairs (setsOfY |> Seq.ofArray)
+        ////    |> Seq.map (fun ((setX, x1, x2), (setY, y1, y2)) ->
+        ////        setX |> Set.intersect setY, x1, x2, y1, y2)
+        ////    |> Seq.filter (fun (set, _, _, _, _) -> set |> Set.count > minSetSize)
+        ////    |> Seq.toArray
+        //let merge = 
+        //    setsOfX 
+        //    |> Seq.ofArray 
+        //    |> Seq.allPairs (setsOfY |> Seq.ofArray)
+        //    |> Seq.allPairs (setsOfZ |> Seq.ofArray)
+        //    |> Seq.map (fun ((setZ, z1, z2), ((setX, x1, x2), (setY, y1, y2))) ->
+        //        seq { yield setX; yield setY; yield setZ } |> Set.intersectMany, x1, x2, y1, y2, z1, z2)
+        //    |> Seq.filter (fun (set, _, _, _, _, _, _) -> set |> Set.count = 981)
+        //    |> Seq.minBy (fun (_, x, _, y, _, z, _) -> x + y + z)
+        //let (_, x1, x2, y1, y2, z1, z2) = merge
+        let (x1, x2, y1, y2, z1, z2) = 14683160, 17382741, 15438213, 18198551, 5400242, 20987977
+        printfn "%d, %d, %d, %d, %d, %d" x1 x2 y1 y2 z1 z2
+
+        let i =
+            Seq.initInfinite identity
+            |> Seq.skipWhile (fun i ->
+                //let i = i + 2600000
+                bots |> Seq.ofArray |> Seq.filter (fun bot -> (x1 + i, y1 + i, z1 + i) |> inRadiusOf bot) |> Seq.length < 672) 
+            |> Seq.head
+
+        let result2 = x1 + y1 + z1 + i
+        { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
+
+module Day24 =
+
+    let go() =
+        let inputImmuneSystem = inputFromResource "AdventOfCode.Inputs._2018.24_ImmuneSystem_0.txt"
+        let inputInfection = inputFromResource "AdventOfCode.Inputs._2018.24_Infection_0.txt"
+
+        let result1 = 1
+
+        let result2 = 2
+
+        { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
+
+module Day25 =
+
+    let go() =
+        let input = inputFromResource "AdventOfCode.Inputs._2018.25.txt"
+
+        let result1 = 1
+
+        let result2 = 2
+
+        { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
