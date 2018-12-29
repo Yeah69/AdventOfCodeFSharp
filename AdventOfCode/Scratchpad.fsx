@@ -25,3 +25,13 @@ let newDistanceMap =
         map |> Map.add node 1)
 
 newDistanceMap |> Map.count
+
+let array =
+    seq { yield 0; yield 1 }
+    |> Seq.sortBy (fun i -> i)
+    |> Seq.append (seq {yield 2})
+    |> Seq.pairwise
+    |> Seq.map (fun (first, second) -> first + second)
+    |> Seq.toArray
+
+printfn "%d" (array |> Array.length)
