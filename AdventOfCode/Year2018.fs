@@ -2372,14 +2372,198 @@ module Day23 =
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day24 =
+    
+    type DamageType = | Fire | Cold | Slashing | Radiation | Bludgeoning
+
+    type Group = { Units: int32; HP: int32; Immunities: Set<DamageType>; Weaknesses: Set<DamageType>; Damage: int32; DamageType: DamageType; Initiative: int32 }
+
+    let ImmuneSystem =
+        [| 
+        { Units = 76;   HP = 3032;  Immunities = Set.empty;                            Weaknesses = Set.empty;                      Damage = 334;  DamageType = Radiation;   Initiative = 7  }
+        { Units = 4749; HP = 8117;  Immunities = Set.empty;                            Weaknesses = Set.empty;                      Damage = 16;   DamageType = Bludgeoning; Initiative = 16 }
+        { Units = 4044; HP = 1287;  Immunities = [Radiation; Fire] |> Set.ofList;      Weaknesses = Set.empty;                      Damage = 2;    DamageType = Fire;        Initiative = 20 }
+        { Units = 1130; HP = 11883; Immunities = Set.empty;                            Weaknesses = [Radiation] |> Set.ofList;      Damage = 78;   DamageType = Radiation;   Initiative = 14 }
+        { Units = 1698; HP = 2171;  Immunities = Set.empty;                            Weaknesses = [Slashing; Fire] |> Set.ofList; Damage = 11;   DamageType = Bludgeoning; Initiative = 12 }
+        { Units = 527;  HP = 1485;  Immunities = Set.empty;                            Weaknesses = Set.empty;                      Damage = 26;   DamageType = Bludgeoning; Initiative = 17 }
+        { Units = 2415; HP = 4291;  Immunities = [Radiation] |> Set.ofList;            Weaknesses = Set.empty;                      Damage = 17;   DamageType = Cold;        Initiative = 5  }
+        { Units = 3266; HP = 6166;  Immunities = [Cold; Slashing] |> Set.ofList;       Weaknesses = [Radiation] |> Set.ofList;      Damage = 17;   DamageType = Bludgeoning; Initiative = 18 }
+        { Units = 34;   HP = 8390;  Immunities = [Cold; Fire; Slashing] |> Set.ofList; Weaknesses = Set.empty;                      Damage = 2311; DamageType = Cold;        Initiative = 10 }
+        { Units = 3592; HP = 5129;  Immunities = [Cold; Fire] |> Set.ofList;           Weaknesses = [Radiation] |> Set.ofList;      Damage = 14;   DamageType = Radiation;   Initiative = 11 }
+        |]
+
+    let Infection =
+        [| 
+        { Units = 3748; HP = 11022; Immunities = Set.empty;                             Weaknesses = [Bludgeoning] |> Set.ofList;       Damage = 4;  DamageType = Bludgeoning; Initiative = 6  }
+        { Units = 2026; HP = 11288; Immunities = Set.empty;                             Weaknesses = [Fire; Slashing] |> Set.ofList;    Damage = 10; DamageType = Slashing;    Initiative = 13 }
+        { Units = 4076; HP = 23997; Immunities = [Cold] |> Set.ofList;                  Weaknesses = Set.empty;                         Damage = 11; DamageType = Bludgeoning; Initiative = 19 }
+        { Units = 4068; HP = 40237; Immunities = [Cold] |> Set.ofList;                  Weaknesses = [Slashing] |> Set.ofList;          Damage = 18; DamageType = Slashing;    Initiative = 4  }
+        { Units = 3758; HP = 16737; Immunities = Set.empty;                             Weaknesses = [Slashing] |> Set.ofList;          Damage = 6;  DamageType = Radiation;   Initiative = 2  }
+        { Units = 1184; HP = 36234; Immunities = [Cold] |> Set.ofList;                  Weaknesses = [Bludgeoning; Fire] |> Set.ofList; Damage = 60; DamageType = Radiation;   Initiative = 1  }
+        { Units = 1297; HP = 36710; Immunities = [Cold] |> Set.ofList;                  Weaknesses = Set.empty;                         Damage = 47; DamageType = Fire;        Initiative = 3  }
+        { Units =  781; HP = 18035; Immunities = [Bludgeoning; Slashing] |> Set.ofList; Weaknesses = Set.empty;                         Damage = 36; DamageType = Fire;        Initiative = 15 }
+        { Units = 1491; HP = 46329; Immunities = [Bludgeoning; Slashing] |> Set.ofList; Weaknesses = Set.empty;                         Damage = 56; DamageType = Fire;        Initiative = 8  }
+        { Units = 1267; HP = 34832; Immunities = [Cold] |> Set.ofList;                  Weaknesses = Set.empty;                         Damage = 49; DamageType = Radiation;   Initiative = 9  }
+        |]
+    
+    let ImmuneSystem_0 =
+        [| 
+        { Units = 17;  HP = 5390; Immunities = Set.empty;            Weaknesses = [Radiation; Bludgeoning] |> Set.ofList; Damage = 4507; DamageType = Fire;     Initiative = 2 }
+        { Units = 989; HP = 1274; Immunities = [Fire] |> Set.ofList; Weaknesses = [Bludgeoning; Slashing] |> Set.ofList;  Damage = 25;   DamageType = Slashing; Initiative = 3 }
+        |]
+
+    let Infection_0 =
+        [| 
+        { Units = 801;  HP = 4706; Immunities = Set.empty;                 Weaknesses = [Radiation] |> Set.ofList;  Damage = 116; DamageType = Bludgeoning; Initiative = 1 }
+        { Units = 4485; HP = 2961; Immunities = [Radiation] |> Set.ofList; Weaknesses = [Fire; Cold] |> Set.ofList; Damage = 12;  DamageType = Slashing;    Initiative = 4 }
+        |]
+
+    let identity x = x
+
+    let effectivePower group = group.Units * group.Damage
+
+    let isRemoved group = group.Units <= 0
+
+    let isImmuneSystem immuneSystem group =
+        (group, immuneSystem) ||> Array.contains
+
+    let isInfection infection group =
+        (group, infection) ||> Array.contains
+
+    let getsDamageFrom group opponent = 
+        if (group.DamageType, opponent.Immunities) ||> Set.contains then
+            0
+        else
+            let baseDamage = group |> effectivePower
+            if (group.DamageType, opponent.Weaknesses) ||> Set.contains then
+                baseDamage * 2
+            else
+                baseDamage
+
+    let sortWithInitiative x y =
+        if x.Initiative > y.Initiative then -1
+        elif x.Initiative < y.Initiative then 1
+        else 0
+
+    let sortWithEffectivePowerThanInitiative x y =
+        let xEffectivePower, yEffectivePower = x |> effectivePower, y |> effectivePower
+        if xEffectivePower > yEffectivePower then -1
+        elif xEffectivePower < yEffectivePower then 1
+        else (x, y) ||> sortWithInitiative
+
+    let chooseTarget opponents selected group =
+        let maybeTarget =
+            opponents
+            |> Seq.ofArray
+            |> Seq.filter (isRemoved >> not)
+            |> Seq.filter (fun opponent -> (opponent, selected) ||> Set.contains |> not)
+            |> Seq.sortWith (fun x y ->
+                let xDamage, yDamage = x |> getsDamageFrom group, y |> getsDamageFrom group
+                if xDamage > yDamage then -1
+                elif xDamage < yDamage then 1
+                else (x, y) ||> sortWithEffectivePowerThanInitiative)
+            |> Seq.tryHead
+        match maybeTarget with
+        | Some target when target |> getsDamageFrom group <= 0 -> None
+        | Some target -> Some target
+        | None -> None
+
+
+    let targetSelectionPhase immuneSystem infection =
+        let immuneSystemMap = 
+            immuneSystem 
+            |> Seq.ofArray 
+            |> Seq.mapi (fun i group -> group, i)
+            |> Map.ofSeq
+        let infectionMap = 
+            infection 
+            |> Seq.ofArray 
+            |> Seq.mapi (fun i group -> group, i)
+            |> Map.ofSeq
+        let (seq, _) =
+            immuneSystem |> Seq.ofArray
+            |> Seq.append (infection |> Seq.ofArray)
+            |> Seq.sortWith sortWithEffectivePowerThanInitiative
+            |> Operations.asFirst Set.empty
+            ||> Seq.mapFold (fun set group ->
+                let isImmuneSystem = (immuneSystem, group) ||> isImmuneSystem
+                let opponents = if isImmuneSystem then infection else immuneSystem
+                let maybeSelected = group |> chooseTarget opponents set
+                match maybeSelected, isImmuneSystem with
+                | Some opponent, true ->
+                    let set = (opponent, set) ||> Set.add
+                    let getAttacker() = (immuneSystem, immuneSystemMap.[group]) ||> Array.get
+                    let getOpponent() = (infection, infectionMap.[opponent]) ||> Array.get
+                    let setOpponent newOpponent = (infection, infectionMap.[opponent], newOpponent) |||> Array.set
+                    Some (getAttacker, getOpponent, setOpponent), set
+                | Some opponent, false ->
+                    let set = (opponent, set) ||> Set.add
+                    let getAttacker() = (infection, infectionMap.[group]) ||> Array.get
+                    let getOpponent() = (immuneSystem, immuneSystemMap.[opponent]) ||> Array.get
+                    let setOpponent newOpponent = (immuneSystem, immuneSystemMap.[opponent], newOpponent) |||> Array.set
+                    Some (getAttacker, getOpponent, setOpponent), set
+                | None, _ -> None, set)
+        seq |> Seq.choose identity
+
+    let takeDamage damage group =
+        { group with Units = group.Units - damage / group.HP }
+        
+    let attackPhase orders =
+        orders
+        |> Seq.sortByDescending (fun (getAttacker, _, _) -> getAttacker().Initiative)
+        |> Seq.iter(fun (getAttacker, getOpponent, setOpponent) ->
+            let attacker, opponent = getAttacker(), getOpponent()
+            if attacker |> isRemoved |> not then
+                let damage = opponent |> getsDamageFrom attacker
+                let updatedOpponent = opponent |> takeDamage damage
+                setOpponent updatedOpponent)
+
+    let countRemainingUnits groups =
+        groups 
+        |> Seq.ofArray
+        |> Seq.filter (isRemoved >> not)
+        |> Seq.sumBy (fun group -> group.Units)
 
     let go() =
-        let inputImmuneSystem = inputFromResource "AdventOfCode.Inputs._2018.24_ImmuneSystem_0.txt"
-        let inputInfection = inputFromResource "AdventOfCode.Inputs._2018.24_Infection_0.txt"
 
-        let result1 = 1
+        let war boost =
+            let immuneSystem = ImmuneSystem |> Array.map (fun group -> { group with Damage = group.Damage + boost })
+            let infection = Infection |> Array.copy
+            let _ =
+                (-1, -1)
+                |> Seq.unfold(fun (lastImmuneSystemCount, lastInfectionCount) ->
+                    let isImmuneSystemDown = immuneSystem |> Array.forall isRemoved
+                    let isInfectionDown = infection |> Array.forall isRemoved
+                    if isImmuneSystemDown || isInfectionDown then
+                        None
+                    else
+                        let orders = (immuneSystem, infection) ||> targetSelectionPhase
+                        orders |> attackPhase
+                        let countImmuneSystem, countInfection = immuneSystem |> countRemainingUnits, infection |> countRemainingUnits
+                        if countImmuneSystem = lastImmuneSystemCount && countInfection = lastInfectionCount then
+                            None
+                        else
+                            Some (1, (countImmuneSystem, countInfection)))
+                |> Seq.last
+            immuneSystem, infection
 
-        let result2 = 2
+        let (immuneSystem1, infection1) = war 0
+        
+        let isImmuneSystemDown = immuneSystem1 |> Array.forall isRemoved
+        let winners = if isImmuneSystemDown then infection1 else immuneSystem1
+
+        let result1 = winners |> countRemainingUnits
+
+        let immuneSystem2 =
+            (110, false)
+            |> Seq.unfold (fun (boost, abort) ->
+                if abort then
+                    None
+                else
+                    let (immuneSystem, infection) = war boost
+                    Some (immuneSystem, (boost + 1, infection |> Array.forall isRemoved)))
+            |> Seq.last
+
+        let result2 = immuneSystem2  |> countRemainingUnits
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
