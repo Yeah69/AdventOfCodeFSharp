@@ -253,3 +253,155 @@ module Day6 =
             |> Seq.sumBy (fun pos -> pos ||> Array2D.get field2)
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
+
+module Day7 =
+    open System.Text.RegularExpressions
+
+    type UInt16 = uint16
+    type Integer = int
+
+    type Operation = 
+        | Assignment of Operand : string * Assignee : string
+        | And of Operand1 : string * Operand2 : string * Assignee : string
+        | Or of Operand1 : string * Operand2 : string * Assignee : string
+        | LeftShift of Operand1 : string * Operand2 : string * Assignee : string
+        | RightShift of Operand1 : string * Operand2 : string * Assignee : string
+        | Not of Operand : string * Assignee : string
+
+    let (|Regex|_|) pattern input =
+        let m = Regex.Match(input, pattern)
+        if m.Success then Some(List.tail [ for g in m.Groups -> g.Value ])
+        else None
+
+    let (|Operation|_|) text =
+        match text with
+        | Regex "(.+) -> (.+)" [ operation; assignee ] -> 
+            match operation with
+            | Regex "(.+) AND (.+)" [op1; op2]      -> Some(And(op1, op2, assignee))
+            | Regex "(.+) OR (.+)" [op1; op2]       -> Some(Or(op1, op2, assignee))
+            | Regex "(.+) LSHIFT (.+)" [op1; op2]   -> Some(LeftShift(op1, op2, assignee))
+            | Regex "(.+) RSHIFT (.+)" [op1; op2]   -> Some(RightShift(op1, op2, assignee))
+            | Regex "NOT (.+)" [op]                 -> Some(Not(op, assignee))
+            | _                                     -> Some(Assignment(operation, assignee))
+        | _ -> None
+
+    let doOperation map operation =
+        let insertIfNotExisting map operand =
+            if (operand, map) ||> Map.containsKey then
+                map
+            else
+                let success, number = Integer.TryParse operand
+                let number = if success then number else 0
+                (operand, uint16 number, map) |||> Map.add
+        match operation with
+        | Assignment (op, ass) ->
+            let map = (map, op) ||> insertIfNotExisting
+            (ass, (op, map) ||> Map.find, map) |||> Map.add
+        | And (op1, op2, ass) ->
+            let map = (map, op1) ||> insertIfNotExisting
+            let map = (map, op2) ||> insertIfNotExisting
+            let result = ((op1, map) ||> Map.find) &&& ((op2, map) ||> Map.find)
+            (ass, result, map) |||> Map.add
+        | Or (op1, op2, ass) ->
+            let map = (map, op1) ||> insertIfNotExisting
+            let map = (map, op2) ||> insertIfNotExisting
+            let result = ((op1, map) ||> Map.find) ||| ((op2, map) ||> Map.find)
+            (ass, result, map) |||> Map.add
+        | LeftShift (op1, op2, ass) ->
+            let map = (map, op1) ||> insertIfNotExisting
+            let map = (map, op2) ||> insertIfNotExisting
+            let result = ((op1, map) ||> Map.find) <<< int32 ((op2, map) ||> Map.find)
+            (ass, result, map) |||> Map.add
+        | RightShift (op1, op2, ass) ->
+            let map = (map, op1) ||> insertIfNotExisting
+            let map = (map, op2) ||> insertIfNotExisting
+            let result = ((op1, map) ||> Map.find) >>> int32 ((op2, map) ||> Map.find)
+            (ass, result, map) |||> Map.add
+        | Not (op, ass) ->
+            let map = (map, op) ||> insertIfNotExisting
+            let result = ~~~ ((op, map) ||> Map.find)
+            (ass, result, map) |||> Map.add
+
+    let getAssignee operation =
+        match operation with
+        | Assignment (_, ass) 
+        | And (_, _, ass)
+        | Or (_, _, ass)
+        | And (_, _, ass)
+        | LeftShift (_, _, ass)
+        | RightShift (_, _, ass)
+        | Not (_, ass) -> ass
+
+    let getOperands operation =
+        match operation with
+        | Assignment (op, _) 
+        | Not (op, _) -> [ op ]
+        | And (op1, op2, _)
+        | Or (op1, op2, _)
+        | LeftShift (op1, op2, _)
+        | RightShift (op1, op2, _) -> [ op1; op2 ]
+
+
+    
+    let go() =
+        let input = inputFromResource "AdventOfCode.Inputs._2015.07.txt"
+        let lines = input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+
+        let map = Map.empty
+
+        let assigneeToOperation =
+            lines
+            |> Seq.ofArray
+            |> Seq.choose (fun line -> 
+                match line with
+                | Operation op -> Some op
+                | _ -> None)
+            |> Seq.map (fun op -> op |> getAssignee, op)
+            |> Map.ofSeq
+        
+        let iteration map assigneeToOperation =
+            (map, assigneeToOperation)
+            |> Seq.unfold (fun (map, assigneeToOperation) ->
+                if assigneeToOperation |> Map.isEmpty then
+                    None
+                else
+                    let (map, assigneeToOperation) =
+                        assigneeToOperation
+                        |> Map.toSeq
+                        |> Seq.filter(fun (_, op) -> 
+                            op 
+                            |> getOperands 
+                            |> List.forall (fun operand -> 
+                                let (isNumber, _) = operand |> Integer.TryParse
+                                isNumber || ((operand, assigneeToOperation) ||> Map.containsKey |> not)))
+                        |> Operations.asFirst (map, assigneeToOperation)
+                        ||> Seq.fold (fun (map, assingeeToOperation) (assignee, operation) -> 
+                            let map = (map, operation) ||> doOperation
+                            let assigneeToOperation = (assignee, assingeeToOperation) ||> Map.remove
+                            (map, assigneeToOperation))
+                    Some(map, (map, assigneeToOperation)))
+            |> Seq.last
+
+        let map = (map, assigneeToOperation) ||> iteration
+
+        let result1 = ("a", map) ||> Map.find
+
+        let map = Map.empty
+        let map = ("b", result1, map) |||> Map.add
+
+        let assigneeToOperation =
+            lines
+            |> Seq.ofArray
+            |> Seq.choose (fun line -> 
+                match line with
+                | Operation op -> Some op
+                | _ -> None)
+            |> Seq.map (fun op -> op |> getAssignee, op)
+            |> Map.ofSeq
+        let assigneeToOperation = ("b", assigneeToOperation) ||> Map.remove
+
+        let map = (map, assigneeToOperation) ||> iteration
+            
+        let result2 = ("a", map) ||> Map.find
+
+        { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
