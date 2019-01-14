@@ -405,3 +405,97 @@ module Day7 =
         let result2 = ("a", map) ||> Map.find
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
+
+module Day8 =
+    let go() =
+        let input = inputFromResource "AdventOfCode.Inputs._2015.08.txt"
+        let lines = input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+
+        let (inCode, inMemory) =
+            lines
+            |> Seq.ofArray
+            |> Seq.map (fun line ->
+                let inCode = line.Length
+                let inMemory = 
+                    1
+                    |> Seq.unfold (fun curIdx ->
+                        if curIdx >= line.Length - 1 then
+                            None
+                        else
+                            let nextIdx =
+                                match line.Chars curIdx, line.Chars (curIdx + 1) with
+                                | ('\\', '\\') | ('\\', '"') -> curIdx + 2
+                                | ('\\', 'x') -> curIdx + 4
+                                | _ -> curIdx + 1
+
+                            Some(1, nextIdx))
+                    |> Seq.sum
+                inCode, inMemory)
+            |> Operations.asFirst (0, 0)
+            ||> Seq.fold (fun (aggInCode, aggInMemory) (inCode, inMemory) ->
+                aggInCode + inCode, aggInMemory + inMemory)
+        
+        let result1 = inCode - inMemory
+
+        let increase =
+            lines
+            |> Seq.ofArray
+            |> Seq.map (fun line ->
+                (line.ToCharArray() |> Seq.ofArray |> Seq.filter (fun c -> c = '"' || c = '\\') |> Seq.length) + 2)
+            |> Seq.sum
+
+        let result2 = increase
+
+        { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
+
+module Day9 =
+    open System.Text.RegularExpressions
+
+    type Integer = int
+
+    let (|Regex|_|) pattern input =
+        let m = Regex.Match(input, pattern)
+        if m.Success then Some(List.tail [ for g in m.Groups -> g.Value ])
+        else None
+
+    let identity x = x
+
+    let go() =
+        let input = inputFromResource "AdventOfCode.Inputs._2015.09.txt"
+        let lines = input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+
+        let map =
+            lines
+            |> Seq.ofArray
+            |> Seq.map(fun line ->
+                match line with
+                | Regex "(.+) to (.+) = (\d+)" mat -> Some mat
+                | _ -> None)
+            |> Seq.choose identity
+            |> Seq.collect (fun mat ->
+                let firstTown::secondTown::distText::_ = mat
+                let distance = distText |> Integer.Parse
+                seq { yield (firstTown, secondTown), distance
+                      yield (secondTown, firstTown), distance })
+            |> Map.ofSeq
+
+        let minDist' f =
+            let rec minDist set currentTown (currentDistance : int) =
+                if set |> Set.isEmpty then
+                    currentDistance
+                else
+                    set
+                    |> Set.toSeq
+                    |> Seq.map (fun nextTown ->
+                        minDist (set |> Set.remove nextTown) nextTown (currentDistance + map.[(currentTown, nextTown)]))
+                    |> f
+
+            let set = map |> Map.toSeq |> Seq.map (fun ((town, _), _ ) -> town) |> Set.ofSeq
+
+            set |> Set.toSeq |> Seq.map (fun town -> minDist (set |> Set.remove town) town 0) |> f
+
+        let result1 = minDist' Seq.min
+
+        let result2 = minDist' Seq.max
+
+        { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
