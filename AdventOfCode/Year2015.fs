@@ -473,10 +473,12 @@ module Day9 =
                 | _ -> None)
             |> Seq.choose identity
             |> Seq.collect (fun mat ->
-                let firstTown::secondTown::distText::_ = mat
-                let distance = distText |> Integer.Parse
-                seq { yield (firstTown, secondTown), distance
-                      yield (secondTown, firstTown), distance })
+                match mat with
+                | firstTown::secondTown::distText::_ ->
+                    let distance = distText |> Integer.Parse
+                    seq { yield (firstTown, secondTown), distance
+                          yield (secondTown, firstTown), distance }
+                | _ -> Seq.empty)
             |> Map.ofSeq
 
         let minDist' f =
@@ -497,5 +499,45 @@ module Day9 =
         let result1 = minDist' Seq.min
 
         let result2 = minDist' Seq.max
+
+        { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
+
+module Day10 =
+    open System
+
+    type Integer = int
+
+    let go() =
+        let input = inputFromResource "AdventOfCode.Inputs._2015.10.txt"
+
+        let inputAsNodes =
+            input.ToCharArray()
+            |> Seq.ofArray
+            |> Operations.asFirst []
+            ||> Seq.fold (fun currentList nextChar ->
+                match currentList with
+                | [] -> [(1, nextChar.ToString() |> Integer.Parse)]
+                | (number, lastChar)::tail when lastChar = (nextChar.ToString() |> Integer.Parse) -> (number + 1, lastChar)::tail
+                | _ -> (1, nextChar.ToString() |> Integer.Parse)::currentList)
+            |> List.rev
+
+        let iteration currentNodes =
+            ([], currentNodes)
+            ||> List.fold(fun currentList currentNode ->
+                match currentList, currentNode with
+                | [], (count, number) when count = number -> [(2, count)]
+                | [], (count, number) -> [(1, number); (1,count)]
+                | (headCount, headNumber)::tail, (count, number) when count = headNumber && count = number -> (headCount + 2, headNumber)::tail
+                | (headCount, headNumber)::tail, (count, number) when count = headNumber -> (1, number)::(headCount + 1, headNumber)::tail
+                | currentList, (count, number) when count = number -> (2, number)::currentList
+                | currentList, (count, number) -> (1, number)::(1, count)::currentList
+                | _ -> failwith "something wrong here")
+            |> List.rev
+            
+        let forResult1 = (inputAsNodes, seq { 1 .. 39 }) ||> Seq.fold (fun curNodes _ -> iteration curNodes)
+        let result1 = (forResult1 |> List.length) * 2
+        
+        let forResult2 = (forResult1, seq { 1 .. 10 }) ||> Seq.fold (fun curNodes _ -> iteration curNodes)
+        let result2 = (forResult2 |> List.length) * 2
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
