@@ -503,8 +503,6 @@ module Day9 =
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day10 =
-    open System
-
     type Integer = int
 
     let go() =
@@ -541,3 +539,43 @@ module Day10 =
         let result2 = (forResult2 |> List.length) * 2
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
+
+module Day11 =
+    type Integer = int
+
+    let go() =
+        let input = inputFromResource "AdventOfCode.Inputs._2015.11.txt"
+        
+        let iteration (input : string) =
+            (input.ToCharArray() |> Array.map (fun c -> (c |> int) - 96))
+            |> Seq.unfold (fun previous ->
+                let next = previous |> Array.copy
+                let _ =
+                    ((next.Length - 1), false)
+                    |> Seq.unfold (fun (i, abort) ->
+                        if abort || i < 0 then None
+                        else
+                            let x = (next, i) ||> Array.get
+                            (next, i, if x >= 26 then 1 else x + 1) |||> Array.set
+                            Some(1, (i - 1, x <> 26)))
+                    |> Seq.last
+                Some(next, next))
+            |> Seq.filter (fun current ->
+                let rejectNumber number = (number, current) ||> Array.contains |> not
+                let twoDoubles() = (current |> Seq.pairwise |> Seq.filter (fun (i1, i2) -> i1 = i2) |> Seq.distinct |> Seq.length) >= 2
+                let straight() = 
+                    seq { 0 .. current.Length - 3 } 
+                    |> Seq.map (fun i -> (current, i) ||> Array.get, (current, i + 1) ||> Array.get, (current, i + 2) ||> Array.get) 
+                    |> Seq.filter (fun (i0, i1, i2) -> i1 = i0 + 1 && i2 = i0 + 2) 
+                    |> Seq.tryHead
+                    |> Option.map (fun _ -> true)
+                    |> Option.defaultValue false
+                rejectNumber 9 && rejectNumber 15 && rejectNumber 12 && twoDoubles() && straight())
+            |> Seq.map (fun currentArr -> new string(currentArr |> Array.map(fun i -> (i + 96) |> char)))
+            |> Seq.head
+
+        let result1 = iteration input
+            
+        let result2 = iteration result1
+
+        { First = result1; Second = result2 }
