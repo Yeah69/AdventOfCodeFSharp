@@ -579,3 +579,39 @@ module Day11 =
         let result2 = iteration result1
 
         { First = result1; Second = result2 }
+
+module Day12 =
+    open System.Text.RegularExpressions
+    open Newtonsoft.Json.Linq
+    
+    type Integer = int
+
+    let solution2Abort (jProp : JProperty) = jProp.Value.Type = JTokenType.String && jProp.Value.ToObject<string>() = "red"
+
+    let rec solution2 (jObject : JObject) =
+        let rec solution2Tokens (jToken : JToken) =
+            match jToken.Type with
+            | JTokenType.Property -> jToken.ToObject<JProperty>().Value |> solution2Tokens
+            | JTokenType.Integer -> jToken.ToObject<int>()
+            | JTokenType.Object -> jToken.ToObject<JObject>() |> solution2
+            | JTokenType.Array -> jToken.ToObject<JArray>() |> Seq.sumBy solution2Tokens
+            | _ -> 0
+
+        if jObject.Properties() |> Seq.exists solution2Abort then
+            0
+        else
+            jObject.Properties()
+            |> Seq.sumBy (fun jProperty -> solution2Tokens jProperty)
+
+    let go() =
+        let input = inputFromResource "AdventOfCode.Inputs._2015.12.txt"
+        
+        let result1 =
+            Regex.Matches(input, "(-?\d+)")
+            |> Seq.cast
+            |> Seq.map (fun (mat : Match) -> mat.Value |> Integer.Parse)
+            |> Seq.sum
+
+        let result2 = JObject.Parse(input) |> solution2
+
+        { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
