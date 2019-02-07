@@ -615,3 +615,60 @@ module Day12 =
         let result2 = JObject.Parse(input) |> solution2
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
+
+module Day13 =
+
+    type Integer = int
+
+    let identity x = x
+
+    let go() =
+        let input = inputFromResource "AdventOfCode.Inputs._2015.13.txt"
+        let lines = input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+
+        let map =
+            lines
+            |> Seq.map (fun line ->
+                match line with
+                | Regex "(.+) would (.+) (\d+) happiness units by sitting next to (.+)\." matches -> 
+                    match matches with
+                    | name1::modifier::number::name2::_ -> Some((name1, name2), Integer.Parse(number) * (if modifier = "lose" then -1 else 1))
+                    | _ -> None
+                | _ -> None)
+            |> Seq.choose identity
+            |> Map.ofSeq
+
+        let setOfNames = map |> Map.toSeq |> Seq.map (fst >> fst) |> Set.ofSeq
+
+        let rec permutations currentlyChosen remaining =
+            if remaining |> Set.isEmpty then
+                seq { yield currentlyChosen }
+            else
+                remaining
+                |> Set.toSeq
+                |> Seq.collect (fun next -> permutations (next::currentlyChosen) (remaining |> Set.remove next))
+                
+        let evaluate assignement =
+            if assignement |> List.isEmpty then (0, 0)
+            else
+                let last = assignement |> List.last
+                let mutable min = Integer.MaxValue
+                let sum =  
+                    last::assignement 
+                    |> List.pairwise 
+                    |> List.map (fun (name1, name2) -> 
+                        let partSum = (map |> Map.find (name1, name2)) + (map |> Map.find (name2, name1))
+                        min <- if partSum < min then partSum else min
+                        partSum)
+                    |> List.sum 
+                sum, (sum - min)
+
+        let (result1, result2) =
+            ([], setOfNames) 
+            ||> permutations
+            |> Operations.asFirst (Integer.MinValue, Integer.MinValue)
+            ||> Seq.fold (fun (max1, max2) assignment ->
+                let (curr1, curr2) = evaluate assignment
+                (if curr1 > max1 then curr1 else max1), (if curr2 > max2 then curr2 else max2))
+
+        { First = sprintf "%d" result1; Second = sprintf "%d" result2 }

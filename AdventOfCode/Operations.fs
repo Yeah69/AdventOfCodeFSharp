@@ -26,5 +26,13 @@ let md5 (data : byte array) : string =
 
 let inline asSecond first second = second, first
 let inline asFirst first second = first, second
+
+
+open System.Text.RegularExpressions
+
+let (|Regex|_|) pattern input =
+    let m = Regex.Match(input, pattern)
+    if m.Success then Some(List.tail [ for g in m.Groups -> g.Value ])
+    else None
     
     
