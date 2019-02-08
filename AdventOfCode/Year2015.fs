@@ -672,3 +672,64 @@ module Day13 =
                 (if curr1 > max1 then curr1 else max1), (if curr2 > max2 then curr2 else max2))
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
+
+module Day14 =
+
+    type Integer = int
+
+    let identity x = x
+
+    type Reindeer = { Speed : int; Duration : int; Rest : int; CurrentDistance : int; CurrentPoints : int }
+
+    let go() =
+        let input = inputFromResource "AdventOfCode.Inputs._2015.14.txt"
+        let lines = input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+
+        let reindeers =
+            lines
+            |> Seq.map (fun line ->
+                match line with
+                | Regex "(.+) can fly (\d+) km/s for (\d+) seconds, but then must rest for (\d+) seconds." matches -> 
+                    match matches with
+                    | _::speed::duration::restDuration::_ -> Some({ Speed = Integer.Parse(speed)
+                                                                    Duration = Integer.Parse(duration)
+                                                                    Rest = Integer.Parse(restDuration)
+                                                                    CurrentDistance = 0 
+                                                                    CurrentPoints = 0 })
+                    | _ -> None
+                | _ -> None)
+            |> Seq.choose identity
+            |> Seq.toArray
+
+        let runDistance reindeer runDuration =
+            let blockDistance = reindeer.Speed * reindeer.Duration
+            let blockSpan = reindeer.Duration + reindeer.Rest
+            let totalBlockDistance = blockDistance * (runDuration / blockSpan)
+            let currentModulo = runDuration % blockSpan
+            let distanceCurrentBlock = if currentModulo >= reindeer.Duration then blockDistance else currentModulo * reindeer.Speed
+            totalBlockDistance + distanceCurrentBlock
+
+        let result1 = reindeers |> Array.toSeq |> Seq.map (fun reindeer -> runDistance reindeer 2503) |> Seq.max
+        
+        let finalReindeers =
+            (reindeers, seq{ 1 .. 2503 })
+            ||> Seq.fold (fun reindeers i ->
+                let reindeers = 
+                    reindeers 
+                    |> Array.map (fun reindeer -> 
+                        let modulo = i % (reindeer.Duration + reindeer.Rest)
+                        if modulo <> 0 && modulo <= reindeer.Duration then
+                            { reindeer with CurrentDistance = reindeer.CurrentDistance + reindeer.Speed }
+                        else reindeer)
+                let maxDistance = (reindeers |> Array.maxBy (fun reindeer -> reindeer.CurrentDistance)).CurrentDistance
+                let reindeers = 
+                    reindeers 
+                    |> Array.map (fun reindeer -> 
+                        if reindeer.CurrentDistance = maxDistance then
+                            { reindeer with CurrentPoints = reindeer.CurrentPoints + 1 }
+                        else reindeer)
+                reindeers)
+
+        let result2 = finalReindeers |> Array.map (fun reindeer -> reindeer.CurrentPoints) |> Array.max
+
+        { First = sprintf "%d" result1; Second = sprintf "%d" result2 }

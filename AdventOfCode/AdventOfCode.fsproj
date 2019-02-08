@@ -66,6 +66,8 @@
     <EmbeddedResource Include="Inputs\2015\11.txt" />
     <EmbeddedResource Include="Inputs\2015\12.txt" />
     <EmbeddedResource Include="Inputs\2015\13.txt" />
+    <EmbeddedResource Include="Inputs\2015\14.txt" />
+    <EmbeddedResource Include="Inputs\2015\14_0.txt" />
     <EmbeddedResource Include="Inputs\2018\01.txt" />
     <EmbeddedResource Include="Inputs\2018\02.txt" />
     <EmbeddedResource Include="Inputs\2018\03.txt" />
