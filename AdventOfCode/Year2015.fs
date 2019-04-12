@@ -733,3 +733,90 @@ module Day14 =
         let result2 = finalReindeers |> Array.map (fun reindeer -> reindeer.CurrentPoints) |> Array.max
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
+        
+module Day15 =
+    
+    open System
+    
+    type Integer = int
+
+    let identity x = x
+    
+    type Ingredient = { Capacity : int; Durability : int; Flavor : int; Texture : int; Calories : int }
+
+    let rec getCombinations ingredientSet pieceCount =
+        if (ingredientSet |> Set.count) = 1 then seq { yield seq { yield (ingredientSet |> Set.toSeq |> Seq.head), pieceCount}}
+        else
+            let ingredient = ingredientSet |> Set.toSeq |> Seq.head
+            let ingredientSet = ingredientSet |> Set.remove ingredient
+            seq { 0 .. pieceCount }
+            |> Seq.collect (fun i -> 
+                let others = getCombinations ingredientSet (pieceCount - i)
+                others |> Seq.map (fun combination -> combination |> Seq.append (seq { yield ingredient, i })))
+        
+    let go() =
+        let input = inputFromResource "AdventOfCode.Inputs._2015.15.txt"
+        let lines = input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+
+        let ingredients =
+            lines
+            |> Seq.map (fun line ->
+                match line with
+                | Regex "(.+): capacity (.+), durability (.+), flavor (.+), texture (.+), calories (.+)" matches -> 
+                    match matches with
+                    | name::capacity::durability::flavor::texture::calories::_ -> 
+                        Some(name, 
+                             { Capacity = Integer.Parse(capacity)
+                               Durability = Integer.Parse(durability)
+                               Flavor = Integer.Parse(flavor)
+                               Texture = Integer.Parse(texture)
+                               Calories = Integer.Parse(calories) })
+                    | _ -> None
+                | _ -> None)
+            |> Seq.choose identity
+            |> Map.ofSeq
+            
+        let ingredientNames = 
+            ingredients 
+            |> Map.toSeq 
+            |> Seq.map (fun (key, _) -> key) 
+            |> Set.ofSeq
+
+        let combinations = getCombinations ingredientNames 100
+        
+        let result1 = 
+            combinations
+            |> Seq.map (fun combination ->
+                let calculateProperty getProperty =
+                    Math.Max (0, 
+                              combination 
+                              |> Seq.map (fun (ingredient, pieceCount) -> 
+                                ((ingredients |> Map.find ingredient) |> getProperty) * pieceCount) 
+                              |> Seq.sum)
+                let capacity = calculateProperty (fun ing -> ing.Capacity)
+                let durability = calculateProperty (fun ing -> ing.Durability)
+                let flavor = calculateProperty (fun ing -> ing.Flavor)
+                let texture = calculateProperty (fun ing -> ing.Texture)
+                capacity * durability * flavor * texture)
+            |> Seq.max
+        
+        let result2 =
+            combinations
+            |> Seq.map (fun combination ->
+                let calculateProperty getProperty =
+                    Math.Max (0, 
+                              combination 
+                              |> Seq.map (fun (ingredient, pieceCount) -> 
+                                ((ingredients |> Map.find ingredient) |> getProperty) * pieceCount) 
+                              |> Seq.sum)
+                let capacity = calculateProperty (fun ing -> ing.Capacity)
+                let durability = calculateProperty (fun ing -> ing.Durability)
+                let flavor = calculateProperty (fun ing -> ing.Flavor)
+                let texture = calculateProperty (fun ing -> ing.Texture)
+                let calories = calculateProperty (fun ing -> ing.Calories)
+                calories, capacity * durability * flavor * texture)
+            |> Seq.filter (fun (calories, _) -> calories = 500)
+            |> Seq.map snd
+            |> Seq.max
+        
+        { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
