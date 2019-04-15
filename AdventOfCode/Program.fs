@@ -66,6 +66,7 @@ let main _ =
     | Year 2015, Day 13 -> trackDayPerformance(Year2015.Day13.go)
     | Year 2015, Day 14 -> trackDayPerformance(Year2015.Day14.go)
     | Year 2015, Day 15 -> trackDayPerformance(Year2015.Day15.go)
+    | Year 2015, Day 16 -> trackDayPerformance(Year2015.Day16.go)
 
     | Year 2018, Day 1 -> trackDayPerformance(Year2018.Day1.go)
     | Year 2018, Day 2 -> trackDayPerformance(Year2018.Day2.go)

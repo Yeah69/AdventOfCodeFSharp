@@ -820,3 +820,123 @@ module Day15 =
             |> Seq.max
         
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
+        
+module Day16 =
+
+    type Integer = int
+
+    let identity x = x
+    
+    type Sue = { Number: int; 
+                 Children : int option; 
+                 Cats : int option; 
+                 Samoyeds : int option;
+                 Pomerians : int option;
+                 Akitas : int option;
+                 Vizslas : int option;
+                 Goldfish : int option;
+                 Trees : int option;
+                 Cars : int option;
+                 Perfumes : int option; }
+
+    let rec getCombinations ingredientSet pieceCount =
+        if (ingredientSet |> Set.count) = 1 then seq { yield seq { yield (ingredientSet |> Set.toSeq |> Seq.head), pieceCount}}
+        else
+            let ingredient = ingredientSet |> Set.toSeq |> Seq.head
+            let ingredientSet = ingredientSet |> Set.remove ingredient
+            seq { 0 .. pieceCount }
+            |> Seq.collect (fun i -> 
+                let others = getCombinations ingredientSet (pieceCount - i)
+                others |> Seq.map (fun combination -> combination |> Seq.append (seq { yield ingredient, i })))
+        
+    let go() =
+        let input = inputFromResource "AdventOfCode.Inputs._2015.16.txt"
+        let lines = input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+
+        let aunts =
+            lines
+            |> Seq.map (fun line ->
+                match line with
+                | Regex "Sue (\d+): (.+)" matches -> 
+                    match matches with
+                    | number::remainder::_ -> 
+                        let children = match remainder with 
+                                       | Regex "children: (\d+)" found -> Some(Integer.Parse found.Head)
+                                       | _ -> None
+                        let cats = match remainder with 
+                                   | Regex "cats: (\d+)" found -> Some(Integer.Parse found.Head)
+                                   | _ -> None
+                        let samoyeds = match remainder with 
+                                       | Regex "samoyeds: (\d+)" found -> Some(Integer.Parse found.Head)
+                                       | _ -> None
+                        let pomerians = match remainder with 
+                                        | Regex "pomerians: (\d+)" found -> Some(Integer.Parse found.Head)
+                                        | _ -> None
+                        let akitas = match remainder with 
+                                     | Regex "akitas: (\d+)" found -> Some(Integer.Parse found.Head)
+                                     | _ -> None
+                        let vizslas = match remainder with 
+                                      | Regex "vizslas: (\d+)" found -> Some(Integer.Parse found.Head)
+                                      | _ -> None
+                        let goldfish = match remainder with 
+                                       | Regex "goldfish: (\d+)" found -> Some(Integer.Parse found.Head)
+                                       | _ -> None
+                        let trees = match remainder with 
+                                    | Regex "trees: (\d+)" found -> Some(Integer.Parse found.Head)
+                                    | _ -> None
+                        let cars = match remainder with 
+                                   | Regex "cars: (\d+)" found -> Some(Integer.Parse found.Head)
+                                   | _ -> None
+                        let perfumes = match remainder with 
+                                       | Regex "perfumes: (\d+)" found -> Some(Integer.Parse found.Head)
+                                       | _ -> None
+                        Some({ Number = Integer.Parse number; 
+                               Children = children;
+                               Cats = cats; 
+                               Samoyeds = samoyeds; 
+                               Pomerians = pomerians; 
+                               Akitas = akitas;
+                               Vizslas = vizslas;
+                               Goldfish = goldfish;
+                               Trees = trees;
+                               Cars = cars;
+                               Perfumes = perfumes;})
+                    | _ -> None
+                | _ -> None)
+            |> Seq.choose identity
+
+        let matches = 
+            aunts 
+            |> Seq.filter (fun aunt ->
+                let children = match aunt.Children with | Some x -> x = 3 | None -> true
+                let cats = match aunt.Cats with | Some x -> x = 7 | None -> true
+                let samoyeds = match aunt.Samoyeds with | Some x -> x = 2 | None -> true
+                let pomerians = match aunt.Pomerians with | Some x -> x = 3 | None -> true
+                let akitas = match aunt.Akitas with | Some x -> x = 0 | None -> true
+                let vizslas = match aunt.Vizslas with | Some x -> x = 0 | None -> true
+                let goldfish = match aunt.Goldfish with | Some x -> x = 5 | None -> true
+                let trees = match aunt.Trees with | Some x -> x = 3 | None -> true
+                let cars = match aunt.Cars with | Some x -> x = 2 | None -> true
+                let perfumes = match aunt.Perfumes with | Some x -> x = 1 | None -> true
+                children && cats && samoyeds && pomerians && akitas && vizslas && goldfish && trees && cars && perfumes)
+
+        let result1 = (matches |> Seq.head).Number
+        
+        let matches = 
+            aunts 
+            |> Seq.filter (fun aunt ->
+                let children = match aunt.Children with | Some x -> x = 3 | None -> true
+                let cats = match aunt.Cats with | Some x -> x > 7 | None -> true
+                let samoyeds = match aunt.Samoyeds with | Some x -> x = 2 | None -> true
+                let pomerians = match aunt.Pomerians with | Some x -> x < 3 | None -> true
+                let akitas = match aunt.Akitas with | Some x -> x = 0 | None -> true
+                let vizslas = match aunt.Vizslas with | Some x -> x = 0 | None -> true
+                let goldfish = match aunt.Goldfish with | Some x -> x < 5 | None -> true
+                let trees = match aunt.Trees with | Some x -> x > 3 | None -> true
+                let cars = match aunt.Cars with | Some x -> x = 2 | None -> true
+                let perfumes = match aunt.Perfumes with | Some x -> x = 1 | None -> true
+                children && cats && samoyeds && pomerians && akitas && vizslas && goldfish && trees && cars && perfumes)
+        
+        let result2 = (matches |> Seq.head).Number
+        
+        { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
