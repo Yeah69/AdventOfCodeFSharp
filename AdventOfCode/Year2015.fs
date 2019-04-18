@@ -838,16 +838,6 @@ module Day16 =
                  Trees : int option;
                  Cars : int option;
                  Perfumes : int option; }
-
-    let rec getCombinations ingredientSet pieceCount =
-        if (ingredientSet |> Set.count) = 1 then seq { yield seq { yield (ingredientSet |> Set.toSeq |> Seq.head), pieceCount}}
-        else
-            let ingredient = ingredientSet |> Set.toSeq |> Seq.head
-            let ingredientSet = ingredientSet |> Set.remove ingredient
-            seq { 0 .. pieceCount }
-            |> Seq.collect (fun i -> 
-                let others = getCombinations ingredientSet (pieceCount - i)
-                others |> Seq.map (fun combination -> combination |> Seq.append (seq { yield ingredient, i })))
         
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2015.16.txt"
@@ -938,5 +928,49 @@ module Day16 =
                 children && cats && samoyeds && pomerians && akitas && vizslas && goldfish && trees && cars && perfumes)
         
         let result2 = (matches |> Seq.head).Number
+        
+        { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
+        
+module Day17 =
+
+    type Integer = int
+
+    let identity x = x
+
+    let rec checkCombinations availableContainers value chosenContainers returnedList =
+        match availableContainers with
+        | (i, capacity)::remainder ->
+            let returnedList = checkCombinations remainder value chosenContainers returnedList
+            let value = value + capacity
+            if value > 150 then returnedList
+            else
+                let chosenContainers = (i, capacity)::chosenContainers
+                if value = 150 then
+                    chosenContainers::returnedList
+                else
+                    checkCombinations remainder value chosenContainers returnedList
+        | _ -> returnedList
+            
+        
+    let go() =
+        let input = inputFromResource "AdventOfCode.Inputs._2015.17.txt"
+        let lines = input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+
+        let containers =
+            lines
+            |> Seq.mapi (fun i line ->
+                match line with
+                | Integer mat -> Some (i, mat)
+                | _ -> None)
+            |> Seq.choose identity
+            |> Seq.toList
+
+        let combinations = (checkCombinations containers 0 List.empty List.empty)
+
+        let result1 = combinations |> List.length
+
+        let minContainers = combinations |> Seq.ofList |> Seq.map (fun combination -> combination |> List.length) |> Seq.min
+        
+        let result2 = combinations |> Seq.ofList |> Seq.filter (fun combination -> combination |> List.length = minContainers) |> Seq.length
         
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
