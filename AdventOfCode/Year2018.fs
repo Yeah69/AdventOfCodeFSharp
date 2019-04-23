@@ -130,8 +130,6 @@ module Day4 =
 
     type Log = { Timestamp: DateTime; Event: Event}
 
-    let identity x = x
-
     let tryParseLog line =
         let matchResult = Regex.Match(line, "\[(\d+)-(\d+)-(\d+) (\d+):(\d+)\] (.*)")
         if matchResult.Success then
@@ -1030,8 +1028,6 @@ module Day15 =
     type Integer = int32
     type String = string
 
-    let identity x = x
-
     type Unit = { Position: int*int; HP: int }
 
     type Player = | Elve of Unit | Goblin of Unit
@@ -1694,8 +1690,6 @@ module Day19 =
 module Day20 =
 
     open System.Collections.Generic
-    
-    let identity x = x 
 
     type Node = { 
         Position: int*int
@@ -2124,8 +2118,6 @@ module Day23 =
 
     type SetAction = | Add | Remove
 
-    let identity x = x
-
     let getRadius nanobot = nanobot.Radius
 
     let getPosition nanobot = nanobot.Position
@@ -2288,8 +2280,6 @@ module Day24 =
         { Units = 801;  HP = 4706; Immunities = Set.empty;                 Weaknesses = [Radiation] |> Set.ofList;  Damage = 116; DamageType = Bludgeoning; Initiative = 1 }
         { Units = 4485; HP = 2961; Immunities = [Radiation] |> Set.ofList; Weaknesses = [Fire; Cold] |> Set.ofList; Damage = 12;  DamageType = Slashing;    Initiative = 4 }
         |]
-
-    let identity x = x
 
     let effectivePower group = group.Units * group.Damage
 

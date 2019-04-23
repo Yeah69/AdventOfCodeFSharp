@@ -42,4 +42,4 @@ let (|Integer|_|) text =
     if isSuccess then Some(number)
     else None
     
-    
+let identity x = x

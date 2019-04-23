@@ -458,8 +458,6 @@ module Day9 =
         if m.Success then Some(List.tail [ for g in m.Groups -> g.Value ])
         else None
 
-    let identity x = x
-
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2015.09.txt"
         let lines = input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
@@ -620,8 +618,6 @@ module Day13 =
 
     type Integer = int
 
-    let identity x = x
-
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2015.13.txt"
         let lines = input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
@@ -676,8 +672,6 @@ module Day13 =
 module Day14 =
 
     type Integer = int
-
-    let identity x = x
 
     type Reindeer = { Speed : int; Duration : int; Rest : int; CurrentDistance : int; CurrentPoints : int }
 
@@ -739,8 +733,6 @@ module Day15 =
     open System
     
     type Integer = int
-
-    let identity x = x
     
     type Ingredient = { Capacity : int; Durability : int; Flavor : int; Texture : int; Calories : int }
 
@@ -824,8 +816,6 @@ module Day15 =
 module Day16 =
 
     type Integer = int
-
-    let identity x = x
     
     type Sue = { Number: int; 
                  Children : int option; 
@@ -935,8 +925,6 @@ module Day17 =
 
     type Integer = int
 
-    let identity x = x
-
     let rec checkCombinations availableContainers value chosenContainers returnedList =
         match availableContainers with
         | (i, capacity)::remainder ->
@@ -972,5 +960,58 @@ module Day17 =
         let minContainers = combinations |> Seq.ofList |> Seq.map (fun combination -> combination |> List.length) |> Seq.min
         
         let result2 = combinations |> Seq.ofList |> Seq.filter (fun combination -> combination |> List.length = minContainers) |> Seq.length
+        
+        { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
+        
+module Day18 =
+
+    open System
+
+    type Integer = int
+        
+    let go() =
+        let input = inputFromResource "AdventOfCode.Inputs._2015.18.txt"
+        let lines = input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+
+        let onPositions =
+            lines
+            |> Seq.mapi (fun y line ->
+                y, line)
+            |> Seq.collect (fun (y, line) ->
+                line |> Seq.mapi (fun x char -> x, y, char))
+            |> Seq.filter (fun (_, _, char) -> char = '#')
+            |> Seq.map (fun (x, y, _) -> x, y)
+            |> Set.ofSeq
+
+        let initialField = 
+            Array2D.create 100 100 false
+            |> Array2D.mapi (fun x y _ -> onPositions |> Set.contains (x, y))
+
+        let run field prepStep =
+            (field, seq { 0 .. 99})
+            ||> Seq.fold (fun field _ -> 
+                prepStep field
+                field |> Array2D.mapi (fun x y value ->
+                    let count = 
+                        (seq { Math.Max(0, x - 1) .. Math.Min(99, x + 1) }, seq { Math.Max(0, y - 1) .. Math.Min(99, y + 1) }) 
+                        ||> Seq.allPairs
+                        |> Seq.map (fun (x, y) -> (x, y) ||> Array2D.get field)
+                        |> Seq.filter identity
+                        |> Seq.length
+                    value && (count = 3 || count = 4) || count = 3))
+
+        let result1 = run initialField ignore |> Seq.cast |> Seq.filter identity |> Seq.length
+        
+        let stuckOn field =
+            (0, 0, true) |||> Array2D.set field 
+            (0, 99, true) |||> Array2D.set field 
+            (99, 0, true) |||> Array2D.set field 
+            (99, 99, true) |||> Array2D.set field
+        
+        let fieldForSolution2 = run initialField stuckOn
+        
+        stuckOn fieldForSolution2
+
+        let result2 = fieldForSolution2 |> Seq.cast |> Seq.filter identity |> Seq.length
         
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
