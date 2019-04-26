@@ -1015,3 +1015,155 @@ module Day18 =
         let result2 = fieldForSolution2 |> Seq.cast |> Seq.filter identity |> Seq.length
         
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
+        
+module Day19 =
+
+    open System
+    open System.Threading
+
+    type Integer = int
+        
+    let go() =
+        let input = inputFromResource "AdventOfCode.Inputs._2015.19.txt"
+        let lines = input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+
+        let rules =
+            lines
+            |> Seq.map (fun line ->
+                match line with
+                | Regex "(.*) => (.*)" (find::replace::[]) -> Some(find, replace)
+                | _ -> None)
+            |> Seq.choose identity
+            |> Seq.groupBy fst
+            |> Seq.map (fun (find, replacements) ->
+                find, replacements |> Seq.map snd |> Seq.toArray)
+            |> Map.ofSeq
+
+        let medMolecule = lines |> Seq.last
+
+        let molecules = 
+            rules
+            |> Map.toSeq
+            |> Seq.collect (fun (find, replacements) -> 
+                if medMolecule.IndexOf(find) < 0 then Seq.empty
+                else
+                    0
+                    |> Seq.unfold (fun i ->
+                        let index = medMolecule.IndexOf(find, i)
+                        if index < 0 then None
+                        else Some(index, index + 1))
+                    |> Seq.collect (fun i ->
+                        replacements |> Seq.map (fun replace -> 
+                            let removed = medMolecule.Remove(i, find.Length)
+                            removed.Insert(i, replace))))
+            |> Seq.distinct
+
+        let result1 = molecules |> Seq.length
+
+        let rules =
+            lines
+            |> Seq.map (fun line ->
+                match line with
+                | Regex "(.*) => (.*)" (replace::find::[]) -> Some(find, replace)
+                | _ -> None)
+            |> Seq.choose identity
+            |> Array.ofSeq
+
+        let mutable min = Integer.MaxValue
+        let mutable map = Map.empty
+
+        let rec findSteps (molecule:string) steps =
+            let doIt() =
+                rules 
+                |> Seq.cast
+                |> Seq.collect (fun ((find:string), replace) -> 
+                    if molecule.IndexOf(find) < 0 then 
+                        if molecule = "e" then 
+                            Thread.Sleep(250)
+                            min <- if steps < min then
+                                       Console.WriteLine(steps)
+                                       steps 
+                                   else min
+                            seq { yield steps }
+                        else Seq.empty
+                    else
+                        0
+                        |> Seq.unfold (fun i ->
+                            let index = molecule.IndexOf(find, i)
+                            if index < 0 then None
+                            else Some(index, index + 1))
+                        |> Seq.map (fun i ->
+                            let removed = molecule.Remove(i, find.Length)
+                            removed.Insert(i, replace))
+                        |> Seq.collect (fun molecule -> findSteps molecule (steps + 1)))
+            if map |> Map.containsKey molecule then
+                if map |> Map.find molecule <= steps then Seq.empty
+                else
+                    map <- map |> Map.remove molecule
+                    map <- map |> Map.add molecule steps
+                    Console.WriteLine(molecule)
+                    doIt()
+            else
+                map <- map |> Map.add molecule steps
+                if steps > min then Seq.empty
+                else
+                    Console.WriteLine(molecule)
+                    doIt()
+
+        let result2 = (findSteps medMolecule 0) |> Seq.min
+        
+        { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
+        
+module Day20 =
+
+    open System
+
+    type Integer = int
+    
+    let getDividers (number:int) =
+        seq { 1 .. Math.Sqrt(double number) |> int } 
+        |> Seq.filter (fun i -> number % i = 0)
+        |> Seq.collect (fun i -> if number / i = i then seq { yield i } else seq { yield i; yield number / i})
+                
+    let getDividers2 (number:int) =
+        getDividers number
+        |> Seq.filter (fun i -> i * 50 >= number)
+            
+    let getPresentsCount number =
+        getDividers number |> Seq.map (fun i -> i * 10) |> Seq.sum
+                    
+    let getPresentsCount2 number =
+        getDividers2 number |> Seq.map (fun i -> i * 11) |> Seq.sum
+
+    let go() =
+        let input = inputFromResource "AdventOfCode.Inputs._2015.20.txt"
+
+        let numberOfPresents = Integer.Parse input
+
+        let initialHouseNumber = 1
+
+        let (houseNumber, _) =
+            (initialHouseNumber, getPresentsCount initialHouseNumber)
+            |> Seq.unfold (fun (houseNumber, presents) ->
+                if presents >= numberOfPresents then None
+                else
+                    let houseNumber = houseNumber + 1
+                    let presents = getPresentsCount houseNumber
+                    Some((houseNumber, presents), (houseNumber, presents)))
+            |> Seq.last
+
+        let result1 = houseNumber
+        
+        let (houseNumber, _) =
+            (initialHouseNumber, getPresentsCount2 initialHouseNumber)
+            |> Seq.unfold (fun (houseNumber, presents) ->
+                if presents >= numberOfPresents then None
+                else
+                    let houseNumber = houseNumber + 1
+                    let presents = getPresentsCount2 houseNumber
+                    Some((houseNumber, presents), (houseNumber, presents)))
+            |> Seq.last
+
+        let result2 = houseNumber
+        
+        { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
