@@ -1167,3 +1167,84 @@ module Day20 =
         let result2 = houseNumber
         
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
+        
+module Day21 =
+    
+    open System
+
+    type Item = { Cost:int; Damage:int; Armor:int }
+    
+    let Weapons = [| 
+                     { Cost = 8; Damage = 4; Armor = 0 }
+                     { Cost = 10; Damage = 5; Armor = 0 }
+                     { Cost = 25; Damage = 6; Armor = 0 }
+                     { Cost = 40; Damage = 7; Armor = 0 }
+                     { Cost = 74; Damage = 8; Armor = 0 }
+                  |]
+
+    let Armor = [| 
+                   { Cost = 13; Damage = 0; Armor = 1 }
+                   { Cost = 31; Damage = 0; Armor = 2 }
+                   { Cost = 53; Damage = 0; Armor = 3 }
+                   { Cost = 75; Damage = 0; Armor = 4 }
+                   { Cost = 102; Damage = 0; Armor = 5 }
+                |]
+    
+    let Rings = [| 
+                   { Cost = 25; Damage = 1; Armor = 0 }
+                   { Cost = 50; Damage = 2; Armor = 0 }
+                   { Cost = 100; Damage = 3; Armor = 0 }
+                   { Cost = 20; Damage = 0; Armor = 1 }
+                   { Cost = 40; Damage = 0; Armor = 2 }
+                   { Cost = 80; Damage = 0; Armor = 3 }
+                |]
+
+    type Player = { HP:int; Damage:int; Armor:int }
+
+    let generatePlayerWithItems items hp =
+        ({HP=hp; Damage=0; Armor=0 },items) ||> Seq.fold (fun currentPlayer (item:Item) -> { currentPlayer with Damage = currentPlayer.Damage + item.Damage; Armor = currentPlayer.Armor + item.Armor })
+
+    let fight (player:Player) (boss:Player) =
+        (player, boss) 
+        |> Seq.unfold (fun (player, boss) ->
+            let newHP p1 p2 = p1.HP - Math.Max(1, p2.Damage - p1.Armor)
+            if player.HP <= 0 || boss.HP <= 0 then None
+            else
+                let boss = { boss with HP = newHP boss player}
+                let player =
+                    if boss.HP > 0 then { player with HP = newHP player boss }
+                    else player
+                Some(boss.HP <= 0 && player.HP > 0, (player, boss)))
+        |> Seq.last
+
+    let go() =
+        let input = inputFromResource "AdventOfCode.Inputs._2015.21.txt"
+
+        let boss =
+            match input with
+            | Regex "Hit Points: (\d+)\r\nDamage: (\d+)\r\nArmor: (\d+)" (hp::damage::armor::_) -> { HP = Integer.Parse hp; Damage = Integer.Parse damage; Armor = Integer.Parse armor }
+            | _ -> { HP = 0; Damage = 0; Armor = 0 }
+
+        let run fightFunc resultFunc =
+            Weapons 
+            |> Seq.collect (fun weapon ->
+                seq { 
+                        yield [ weapon ]; 
+                        yield! Armor |> Seq.map (fun armor -> weapon::armor::[])
+                    })
+            |> Seq.collect (fun items -> 
+                seq {
+                        yield items;
+                        yield! Rings |> Seq.map (fun ring -> ring::items);
+                        yield! Rings |> Seq.pairwise |> Seq.where (fun (ring1, ring2) -> ring1 <> ring2) |> Seq.map (fun (ring1, ring2) -> ring1::ring2::items)
+                    })
+            |> Seq.map (fun items -> (generatePlayerWithItems items 100, items))
+            |> Seq.filter (fun (player, _) -> fightFunc player boss)
+            |> Seq.map (fun (_, items) -> items |> List.sumBy (fun item -> item.Cost))
+            |> resultFunc
+
+        let result1 = run (fight) (Seq.min)
+
+        let result2 = run (fun player boss -> fight player boss |> not) (Seq.max)
+        
+        { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
