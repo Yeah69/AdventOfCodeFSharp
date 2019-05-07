@@ -1248,3 +1248,148 @@ module Day21 =
         let result2 = run (fun player boss -> fight player boss |> not) (Seq.max)
         
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
+
+module Day22 =
+
+    open System
+
+    type Player = { HP:int; Mana:int; Armor:int }
+        
+    type Boss = { HP:int; Damage:int; }
+
+    type Spell =
+        | MagicMissile
+        | Drain
+        | Shield
+        | Poison
+        | Recharge
+
+    type BattleResult =
+        | Won
+        | Lost
+
+    let Spells = [ MagicMissile; Drain; Shield; Poison; Recharge ]
+
+    let cost spell =
+        match spell with
+        | MagicMissile -> 53
+        | Drain -> 73
+        | Shield -> 113
+        | Poison -> 173
+        | Recharge -> 229
+
+    let isInstant spell =
+        match spell with
+        | MagicMissile | Drain -> true
+        | Shield | Poison | Recharge -> false
+
+    let isEffect spell =
+        match spell with
+        | MagicMissile | Drain -> false
+        | Shield | Poison | Recharge -> true
+
+    let applySpellOnPlayer spell player =
+        match spell with
+        | MagicMissile | Poison -> player
+        | Shield -> { player with Armor = player.Armor + 7 }
+        | Drain -> { player with HP = Math.Min(50, player.HP + 2) }
+        | Recharge -> { player with Mana = player.Mana + 101 }
+
+    let applySpellOnBoss spell (boss:Boss) =
+        match spell with
+        | Shield | Recharge -> boss
+        | MagicMissile -> { boss with HP = boss.HP - 4}
+        | Drain -> { boss with HP = boss.HP - 2}
+        | Poison -> { boss with HP = boss.HP - 3}
+
+    let takeMana spell player =
+        { player with Mana = player.Mana - cost spell }
+
+        
+    let effectTurns spell =
+        match spell with
+        | MagicMissile | Drain -> 0
+        | Shield -> 6
+        | Poison -> 6 
+        | Recharge -> 5
+
+    let startEffect effects spell =
+        if isEffect spell then effects |> Set.add (spell, effectTurns spell)
+        else effects
+    
+    let updateEffects effects filter =
+        effects 
+        |> Seq.filter filter
+        |> Operations.asFirst effects
+        ||> Seq.fold (fun effects (spell, duration) ->
+            if duration = 1 then
+                effects |> Set.remove (spell, duration)
+            else
+                effects |> Set.remove (spell, duration) |> Set.add (spell, duration - 1))
+
+    let updatePlayerEffects effects =
+        updateEffects effects (fun (spell, _) -> match spell with |Shield|Recharge -> true |MagicMissile|Drain|Poison -> false)
+    
+    let updateBossEffects effects =
+        updateEffects effects (fun (spell, _) -> match spell with |Poison -> true |Shield|Recharge|MagicMissile|Drain|Poison -> false)
+
+    let castableSpells player effects =
+        Spells 
+        |> Seq.filter (fun spell -> player.Mana >= cost spell) 
+        |> Seq.filter (fun spell -> effects |> Seq.exists (fun (spellOfEffect, duration) -> spell = spellOfEffect && duration > 1) |> not)
+
+    let doEffectsStuff player boss effects = 
+        let player = ({player with Armor = 0}, effects) ||> Seq.fold(fun player spell ->  applySpellOnPlayer (spell |> fst) player) 
+        let effects = updatePlayerEffects effects
+        let boss = (boss, effects) ||> Seq.fold(fun boss spell ->  applySpellOnBoss (spell |> fst) boss) 
+        let effects = updateBossEffects effects
+        player, boss, effects
+
+    let rec round player boss effects manaUsed difficultyMode =
+        let availableSpells = castableSpells player effects
+        if availableSpells |> Seq.isEmpty then Lost, manaUsed
+        else
+            // player turn
+            let player = difficultyMode player
+            let (player, boss, effects) = doEffectsStuff player boss effects
+            if boss.HP <= 0 then 
+                Won, manaUsed
+            else 
+                let bestOutcome =
+                    availableSpells
+                    |> Seq.sortBy (fun spell -> cost spell)
+                    |> Seq.map (fun spell ->
+                        let player = player |> takeMana spell
+                        let effects = if spell |> isEffect then spell |> startEffect effects else effects
+                        let manaUsed = manaUsed + (spell |> cost)
+                        let player = if spell |> isInstant then applySpellOnPlayer spell player else player
+                        let boss = if spell |> isInstant then applySpellOnBoss spell boss else boss
+
+                        // boss turn
+                        let (player, boss, effects) = doEffectsStuff player boss effects
+                        if boss.HP <= 0 then 
+                            Won, manaUsed
+                        else 
+                            let player = { player with HP = player.HP - (boss.Damage - player.Armor)}
+                            if player.HP <= 0 then Lost, manaUsed
+                            else round player boss effects manaUsed difficultyMode)
+                    |> Seq.filter (fun (result, _) -> result = Won)
+                    |> Seq.sortBy snd
+                    |> Seq.tryHead
+                bestOutcome |> Option.defaultValue (Lost, manaUsed)
+
+    let go() =
+        let input = inputFromResource "AdventOfCode.Inputs._2015.22.txt"
+
+        let boss =
+            match input with
+            | Regex "Hit Points: (\d+)\r\nDamage: (\d+)" (hp::damage::_) -> { HP = Integer.Parse hp; Damage = Integer.Parse damage; }
+            | _ -> { HP = 0; Damage = 0; }
+
+        let player = { HP = 50; Mana = 500; Armor = 0}
+            
+        let (_, result1) = round player boss Set.empty 0 identity
+
+        let (_, result2) = round player boss Set.empty 0 (fun player -> { player with HP = player.HP - 1 })
+
+        { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
