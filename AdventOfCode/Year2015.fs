@@ -1393,3 +1393,60 @@ module Day22 =
         let (_, result2) = round player boss Set.empty 0 (fun player -> { player with HP = player.HP - 1 })
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
+
+module Day23 =
+
+    let registerInsruction pc registers r logic = 
+        let rValue = registers |> Map.find r
+        let registers = registers |> Map.remove r
+        pc, registers |> Map.add r (logic rValue)
+
+    let conditionedJumpInsruction pc registers r offset predicate = 
+        let rValue = registers |> Map.find r
+        if predicate rValue then pc - 1 + offset, registers else pc, registers
+
+    let run instructions initialA =
+        (0, seq { yield "a", initialA; yield "b", 0 } |> Map.ofSeq, false)
+        |> Seq.unfold (fun (pc, registers, abort) ->
+            if abort then None
+            else
+                let instruction = Array.get instructions pc
+                let (pc, registers) = instruction pc registers
+                let pc = pc + 1
+                Some(registers, (pc, registers, pc < 0 || pc >= (instructions |> Array.length))))
+        |> Seq.last
+
+    let getInstructions lines =
+        lines
+        |> Seq.map (fun line ->
+            match line with
+            | Regex "hlf (.)" (r::[]) -> Some (fun pc registers -> registerInsruction pc registers r (fun rValue -> rValue / 2))
+            | Regex "tpl (.)" (r::[]) -> Some (fun pc registers -> registerInsruction pc registers r (fun rValue -> rValue * 3))
+            | Regex "inc (.)" (r::[]) -> Some (fun pc registers -> registerInsruction pc registers r (fun rValue -> rValue + 1))
+            | Regex "jmp (.*)" (offset::[]) -> Some (fun pc registers -> pc - 1 + (Integer.Parse offset), registers)
+            | Regex "jie (.), (.*)" (r::offset::[]) -> Some (fun pc registers -> conditionedJumpInsruction pc registers r (Integer.Parse offset) (fun rValue -> rValue % 2 = 0))
+            | Regex "jio (.), (.*)" (r::offset::[]) -> Some (fun pc registers -> conditionedJumpInsruction pc registers r (Integer.Parse offset) (fun rValue -> rValue = 1))
+            | _ -> None)
+        |> Seq.choose identity
+        |> Seq.toArray
+
+    let gold() =
+        113383L 
+        |> Seq.unfold (fun a -> 
+            if a = 1L then None
+            else
+                if a % 2L = 0L then Some (1, a / 2L) else Some (1, a * 3L + 1L))
+        |> Seq.sum
+
+    let go() =
+        let input = inputFromResource "AdventOfCode.Inputs._2015.23.txt"
+        let lines = input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+
+        let instructions = lines |> getInstructions
+
+        let result1 = (instructions, 0) ||> run |> Map.find "b"
+
+        //let result2 = (instructions, 1) ||> run |> Map.find "b"
+        let result2 = gold()
+
+        { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
