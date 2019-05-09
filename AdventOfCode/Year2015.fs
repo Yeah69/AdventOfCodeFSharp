@@ -1494,11 +1494,25 @@ module Day24 =
         
 module Day25 =
         
+    let generateCode row column =
+        let diagonal = row + column - 1
+        
+        let lastGaussianSum = diagonal * (diagonal - 1) / 2
+        
+        let flatPosition = lastGaussianSum + diagonal - row + 1
+
+        (20151125L, seq { 2 .. flatPosition}) ||> Seq.fold (fun l _ -> (l * 252533L) % 33554393L)
+
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2015.25.txt"
-        let lines = input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
-        
-        let result1 = 0
+
+        let position = 
+            match input with
+            | Regex "To continue, please consult the code grid in the manual.  Enter the code at row (\d+), column (\d+)." (row::column::_) -> Some(Integer.Parse row, Integer.Parse column)
+            | _ -> None
+            |> Option.defaultValue (0, 0)
+
+        let result1 = position ||> generateCode
         
         let result2 = 0
         
