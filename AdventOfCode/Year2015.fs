@@ -1444,14 +1444,29 @@ module Day23 =
         
 module Day24 =
 
-    let rec getSets third setSofar sumOfSetSofar setRemaining =
-        if sumOfSetSofar = third then [ setSofar ]
-        elif sumOfSetSofar > third || setRemaining |> Set.isEmpty then []
+    let rec getOptions matchSum elementsSofar sumOfSofar remaining =
+        if sumOfSofar = matchSum then [ elementsSofar ]
+        elif sumOfSofar > matchSum || remaining |> List.isEmpty then []
         else
-            let next = setRemaining |> Seq.head
-            let setRemaining = setRemaining |> Set.remove next
-            (getSets third (setSofar |> Set.add next) (sumOfSetSofar + next) setRemaining)
-            |> List.append (getSets third setSofar sumOfSetSofar setRemaining)
+            let next = remaining |> List.head
+            let remaining = match remaining with | _::rest -> rest | [] -> []
+            (getOptions matchSum (next::elementsSofar) (sumOfSofar + next) remaining)
+            |> List.append (getOptions matchSum elementsSofar sumOfSofar remaining)
+
+    let run matchSum allElements predicate =
+        let (_, qe, _) =
+            getOptions matchSum [] 0L allElements
+            |> Seq.map (fun elements -> elements |> List.length, (1L, elements) ||> Seq.fold (fun product weight -> weight * product), elements)
+            |> Seq.sortWith (fun (xCount, xQE, _) (yCount, yQE, _) -> 
+                if xCount < yCount then -1
+                elif yCount < xCount then 1
+                else
+                    if xQE < yQE then -1
+                    elif yQE < xQE then 1
+                    else 0)
+            |> Seq.filter (fun (_, _, elements) -> predicate elements)
+            |> Seq.head
+        qe
         
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2015.24.txt"
@@ -1460,46 +1475,20 @@ module Day24 =
         let weights =
             lines 
             |> Seq.map (fun line -> Long.Parse line) 
-            |> Set.ofSeq
+            |> List.ofSeq
 
         let sum = (weights |> Seq.sum)
         let third = sum / 3L
 
-        let (_, qe, _) =
-            getSets third Set.empty 0L weights
-            |> Seq.map (fun set -> set.Count, (1L, set) ||> Seq.fold (fun product weight -> weight * product), set)
-            |> Seq.sortWith (fun (xCount, xQE, _) (yCount, yQE, _) -> 
-                if xCount < yCount then -1
-                elif yCount < xCount then 1
-                else
-                    if xQE < yQE then -1
-                    elif yQE < xQE then 1
-                    else 0)
-            |> Seq.filter (fun (_, _, set) -> (getSets third Set.empty 0L ((weights, set) ||> Set.difference)) |> Seq.isEmpty |> not)
-            |> Seq.head
-
-        let result1 = qe
+        let result1 = run third weights (fun elements -> (getOptions third [] 0L (weights |> List.filter (fun weight -> elements |> List.contains weight)) |> Seq.isEmpty |> not))
 
         let fourth = sum / 4L
-
-        let (_, qe, _) =
-            getSets fourth Set.empty 0L weights
-            |> Seq.map (fun set -> set.Count, (1L, set) ||> Seq.fold (fun product weight -> weight * product), set)
-            |> Seq.sortWith (fun (xCount, xQE, _) (yCount, yQE, _) -> 
-                if xCount < yCount then -1
-                elif yCount < xCount then 1
-                else
-                    if xQE < yQE then -1
-                    elif yQE < xQE then 1
-                    else 0)
-            |> Seq.filter (fun (_, _, set) -> 
-                getSets fourth Set.empty 0L ((weights, set) ||> Set.difference)
-                |> Seq.filter (fun secondSet -> getSets fourth Set.empty 0L ((weights, set) ||> Set.difference |> Operations.asSecond secondSet ||> Set.difference) |> Seq.isEmpty |> not)
-                |> Seq.isEmpty
-                |> not)
-            |> Seq.head
         
-        let result2 = qe
+        let result2 = run fourth weights (fun elements -> 
+            getOptions fourth [] 0L (weights |> List.filter (fun weight -> elements |> List.contains weight))
+            |> Seq.filter (fun secondElements -> getOptions fourth [] 0L (weights |> List.filter (fun weight -> elements |> List.contains weight || secondElements |> List.contains weight)) |> Seq.isEmpty |> not)
+            |> Seq.isEmpty
+            |> not)
         
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
         
