@@ -34,8 +34,9 @@ let (|Regex|_|) pattern input =
     let m = Regex.Match(input, pattern)
     if m.Success then Some(List.tail [ for g in m.Groups -> g.Value ])
     else None
-
+    
 type Integer = int
+type Long = int64
     
 let (|Integer|_|) text =
     let (isSuccess, number) = Integer.TryParse text

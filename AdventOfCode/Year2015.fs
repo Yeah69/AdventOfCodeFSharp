@@ -1406,7 +1406,7 @@ module Day23 =
         if predicate rValue then pc - 1 + offset, registers else pc, registers
 
     let run instructions initialA =
-        (0, seq { yield "a", initialA; yield "b", 0 } |> Map.ofSeq, false)
+        (0, seq { yield "a", initialA; yield "b", 0L } |> Map.ofSeq, false)
         |> Seq.unfold (fun (pc, registers, abort) ->
             if abort then None
             else
@@ -1420,23 +1420,15 @@ module Day23 =
         lines
         |> Seq.map (fun line ->
             match line with
-            | Regex "hlf (.)" (r::[]) -> Some (fun pc registers -> registerInsruction pc registers r (fun rValue -> rValue / 2))
-            | Regex "tpl (.)" (r::[]) -> Some (fun pc registers -> registerInsruction pc registers r (fun rValue -> rValue * 3))
-            | Regex "inc (.)" (r::[]) -> Some (fun pc registers -> registerInsruction pc registers r (fun rValue -> rValue + 1))
+            | Regex "hlf (.)" (r::[]) -> Some (fun pc registers -> registerInsruction pc registers r (fun rValue -> rValue / 2L))
+            | Regex "tpl (.)" (r::[]) -> Some (fun pc registers -> registerInsruction pc registers r (fun rValue -> rValue * 3L))
+            | Regex "inc (.)" (r::[]) -> Some (fun pc registers -> registerInsruction pc registers r (fun rValue -> rValue + 1L))
             | Regex "jmp (.*)" (offset::[]) -> Some (fun pc registers -> pc - 1 + (Integer.Parse offset), registers)
-            | Regex "jie (.), (.*)" (r::offset::[]) -> Some (fun pc registers -> conditionedJumpInsruction pc registers r (Integer.Parse offset) (fun rValue -> rValue % 2 = 0))
-            | Regex "jio (.), (.*)" (r::offset::[]) -> Some (fun pc registers -> conditionedJumpInsruction pc registers r (Integer.Parse offset) (fun rValue -> rValue = 1))
+            | Regex "jie (.), (.*)" (r::offset::[]) -> Some (fun pc registers -> conditionedJumpInsruction pc registers r (Integer.Parse offset) (fun rValue -> rValue % 2L = 0L))
+            | Regex "jio (.), (.*)" (r::offset::[]) -> Some (fun pc registers -> conditionedJumpInsruction pc registers r (Integer.Parse offset) (fun rValue -> rValue = 1L))
             | _ -> None)
         |> Seq.choose identity
         |> Seq.toArray
-
-    let gold() =
-        113383L 
-        |> Seq.unfold (fun a -> 
-            if a = 1L then None
-            else
-                if a % 2L = 0L then Some (1, a / 2L) else Some (1, a * 3L + 1L))
-        |> Seq.sum
 
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2015.23.txt"
@@ -1444,9 +1436,81 @@ module Day23 =
 
         let instructions = lines |> getInstructions
 
-        let result1 = (instructions, 0) ||> run |> Map.find "b"
+        let result1 = (instructions, 0L) ||> run |> Map.find "b"
 
-        //let result2 = (instructions, 1) ||> run |> Map.find "b"
-        let result2 = gold()
+        let result2 = (instructions, 1L) ||> run |> Map.find "b"
 
+        { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
+        
+module Day24 =
+
+    let rec getSets third setSofar sumOfSetSofar setRemaining =
+        if sumOfSetSofar = third then [ setSofar ]
+        elif sumOfSetSofar > third || setRemaining |> Set.isEmpty then []
+        else
+            let next = setRemaining |> Seq.head
+            let setRemaining = setRemaining |> Set.remove next
+            (getSets third (setSofar |> Set.add next) (sumOfSetSofar + next) setRemaining)
+            |> List.append (getSets third setSofar sumOfSetSofar setRemaining)
+        
+    let go() =
+        let input = inputFromResource "AdventOfCode.Inputs._2015.24.txt"
+        let lines = input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+
+        let weights =
+            lines 
+            |> Seq.map (fun line -> Long.Parse line) 
+            |> Set.ofSeq
+
+        let sum = (weights |> Seq.sum)
+        let third = sum / 3L
+
+        let (_, qe, _) =
+            getSets third Set.empty 0L weights
+            |> Seq.map (fun set -> set.Count, (1L, set) ||> Seq.fold (fun product weight -> weight * product), set)
+            |> Seq.sortWith (fun (xCount, xQE, _) (yCount, yQE, _) -> 
+                if xCount < yCount then -1
+                elif yCount < xCount then 1
+                else
+                    if xQE < yQE then -1
+                    elif yQE < xQE then 1
+                    else 0)
+            |> Seq.filter (fun (_, _, set) -> (getSets third Set.empty 0L ((weights, set) ||> Set.difference)) |> Seq.isEmpty |> not)
+            |> Seq.head
+
+        let result1 = qe
+
+        let fourth = sum / 4L
+
+        let (_, qe, _) =
+            getSets fourth Set.empty 0L weights
+            |> Seq.map (fun set -> set.Count, (1L, set) ||> Seq.fold (fun product weight -> weight * product), set)
+            |> Seq.sortWith (fun (xCount, xQE, _) (yCount, yQE, _) -> 
+                if xCount < yCount then -1
+                elif yCount < xCount then 1
+                else
+                    if xQE < yQE then -1
+                    elif yQE < xQE then 1
+                    else 0)
+            |> Seq.filter (fun (_, _, set) -> 
+                getSets fourth Set.empty 0L ((weights, set) ||> Set.difference)
+                |> Seq.filter (fun secondSet -> getSets fourth Set.empty 0L ((weights, set) ||> Set.difference |> Operations.asSecond secondSet ||> Set.difference) |> Seq.isEmpty |> not)
+                |> Seq.isEmpty
+                |> not)
+            |> Seq.head
+        
+        let result2 = qe
+        
+        { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
+        
+module Day25 =
+        
+    let go() =
+        let input = inputFromResource "AdventOfCode.Inputs._2015.25.txt"
+        let lines = input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+        
+        let result1 = 0
+        
+        let result2 = 0
+        
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
