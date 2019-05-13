@@ -4,12 +4,75 @@ open Domain
 open Operations
 
 module Day1 =
+    open System
+
+    type CardinalPoint = | North | West | South | East
+
+    type Direction = | Left | Right
+
+    type Instruction = { Direction:Direction; Steps:int }
+
+    let getInstructions (input:string) =
+        let textInstructions = input.Split([| ", " |], System.StringSplitOptions.None)
+        textInstructions 
+        |> Seq.map (fun textInstruction -> 
+            match textInstruction with
+            | Regex "R(\d+)" (steps::_) -> Some { Direction = Right; Steps = Integer.Parse steps }
+            | Regex "L(\d+)" (steps::_) -> Some { Direction = Left; Steps = Integer.Parse steps }
+            | _ -> None)
+        |> Seq.choose identity
+        |> Seq.toList
+        
+    let changeCardinalPoint cardinalPoint instruction =
+        match cardinalPoint, instruction.Direction with
+        | North, Left | South, Right -> West
+        | North, Right | South, Left -> East
+        | West, Left | East, Right -> South
+        | West, Right | East, Left -> North
+        
+    let changePosition (x, y) cardinalPoint steps =
+        match cardinalPoint with
+        | North -> x, y + steps
+        | South -> x, y - steps
+        | West -> x - steps, y
+        | East -> x + steps, y
+
+    let changePositions (x, y) cardinalPoint steps =
+        match cardinalPoint with
+        | North -> seq { y + 1 .. 1 .. y + steps } |> Seq.map (fun y -> x, y) |> Seq.toList
+        | South -> seq { y - 1 .. -1 .. y - steps } |> Seq.map (fun y -> x, y) |> Seq.toList
+        | West -> seq { x - 1 .. -1 .. x - steps } |> Seq.map (fun x -> x, y) |> Seq.toList
+        | East -> seq { x + 1 .. 1 .. x + steps } |> Seq.map (fun x -> x, y) |> Seq.toList
+        
+    let calculate instructions =
+        let (_, (x, y)) = 
+            ((North, (0, 0)), instructions)
+            ||> List.fold (fun (cardinalPoint, position) instruction -> 
+                let cardinalPoint = (cardinalPoint, instruction) ||> changeCardinalPoint
+                cardinalPoint, (position, cardinalPoint, instruction.Steps) |||> changePosition) 
+        
+        (x |> Math.Abs) + (y |> Math.Abs)
+                
+    let calculate2 instructions =
+        ((North, [ (0, 0) ], Set.empty), seq { while true do yield! instructions })
+        ||> Seq.scan (fun (cardinalPoint, positions, set) instruction -> 
+            let cardinalPoint = (cardinalPoint, instruction) ||> changeCardinalPoint
+            let set = (set, positions) ||> List.fold (fun set position -> set |> Set.add position)
+            let positions = (positions |> List.last, cardinalPoint, instruction.Steps) |||> changePositions
+            cardinalPoint, positions, set)
+        |> Seq.collect (fun (_, positions, set) -> positions |> Seq.map (fun position -> position, set))
+        |> Seq.where (fun (position, set) -> set |> Set.contains position)
+        |> Seq.map (fun ((x, y), _) -> (x |> Math.Abs) + (y |> Math.Abs))
+        |> Seq.head
+
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2016.01.txt"
+        
+        let instructions = input |> getInstructions
 
-        let result1 = 0
+        let result1 = instructions |> calculate
 
-        let result2 = 0
+        let result2 = instructions |> calculate2
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
