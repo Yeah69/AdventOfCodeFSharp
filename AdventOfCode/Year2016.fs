@@ -77,14 +77,71 @@ module Day1 =
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day2 =
+    open System
+
+    type Direction = | Up | Down | Left | Right
+
+    let mapCharToDirection c =
+        match c with
+        | 'U' -> Some Up
+        | 'D' -> Some Down
+        | 'L' -> Some Left
+        | 'R' -> Some Right
+        | _ -> None
+
+    let step1 currentNumber direction =
+        match currentNumber, direction with
+        | '2', Left  | '4', Up                          -> '1'
+        | '1', Right | '3', Left  | '5', Up             -> '2'
+        | '2', Right | '6', Up                          -> '3'
+        | '1', Down  | '5', Left  | '7', Up             -> '4'
+        | '2', Down  | '4', Right | '6', Left | '8', Up -> '5'
+        | '3', Down  | '5', Right | '9', Up             -> '6'
+        | '4', Down  | '8', Left                        -> '7'
+        | '5', Down  | '7', Right | '9', Left           -> '8'
+        | '6', Down  | '8', Right                       -> '9'
+        | _ -> currentNumber
+
+    let step2 currentNumber direction =
+        match currentNumber, direction with
+        | '3', Up                                       -> '1'
+        | '3', Left  | '6', Up                          -> '2'
+        | '1', Down  | '2', Right | '4', Left | '7', Up -> '3'
+        | '3', Right | '8', Up                          -> '4'
+        | '6', Left                                     -> '5'
+        | '2', Down  | '5', Right | '7', Left | 'A', Up -> '6'
+        | '3', Down  | '6', Right | '8', Left | 'B', Up -> '7'
+        | '4', Down  | '7', Right | '9', Left | 'C', Up -> '8'
+        | '8', Right                                    -> '9'
+        | '6', Down  | 'B', Left                        -> 'A'
+        | '7', Down  | 'A', Right | 'C', Left | 'D', Up -> 'B'
+        | '8', Down  | 'B', Right                       -> 'C'
+        | 'B', Down                                     -> 'D'
+        | _ -> currentNumber
+
+    let calculate lines step =
+        lines
+        |> Seq.mapi (fun i line -> line, i)
+        |> asFirst ('5', "")
+        ||> Seq.fold (fun (lastNumber, currentSum) ((line: string), i) ->
+            let nextNumber =
+                line
+                |> Seq.map mapCharToDirection
+                |> Seq.choose identity
+                |> asFirst lastNumber 
+                ||> Seq.fold step
+            nextNumber, sprintf "%s%c" currentSum nextNumber)
+        |> snd
+
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2016.02.txt"
+        let lines = input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
 
-        let result1 = 0
+        let result1 = calculate lines step1
 
-        let result2 = 0
+        let result2 = calculate lines step2
 
-        { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
+        { First = result1; Second = result2 }
 
 module Day3 =
     let go() =
