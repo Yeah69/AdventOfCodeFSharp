@@ -77,8 +77,6 @@ module Day1 =
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day2 =
-    open System
-
     type Direction = | Up | Down | Left | Right
 
     let mapCharToDirection c =
@@ -144,12 +142,34 @@ module Day2 =
         { First = result1; Second = result2 }
 
 module Day3 =
+    let parse (input:string) =
+        input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+        |> Seq.map (fun line ->
+            Integer.Parse(line.Substring(0, 5)), Integer.Parse(line.Substring(5, 5)), Integer.Parse(line.Substring(10, 5)))
+        |> Seq.toArray
+
+    let getCountOfValidTriangles seq =
+        seq
+        |> Seq.filter (fun (first, second, third) -> (first + second > third) && (second + third > first) && (first + third > second))
+        |> Seq.length
+
+    let trueTriangularSides triangularSides =
+        triangularSides
+        |> Seq.chunkBySize 3
+        |> Seq.collect (fun threeTriangles ->
+            let (first1, first2, first3) = (threeTriangles, 0) ||> Array.get
+            let (second1, second2, second3) = (threeTriangles, 1) ||> Array.get
+            let (third1, third2, third3) = (threeTriangles, 2) ||> Array.get
+            seq { yield first1, second1, third1; yield first2, second2, third2; yield first3, second3, third3})
+    
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2016.03.txt"
+        
+        let triangularSides = input |> parse
 
-        let result1 = 0
+        let result1 = triangularSides |> getCountOfValidTriangles
 
-        let result2 = 0
+        let result2 = triangularSides |> trueTriangularSides |> getCountOfValidTriangles
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
