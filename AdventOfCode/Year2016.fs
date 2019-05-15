@@ -174,12 +174,72 @@ module Day3 =
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day4 =
+    type EncryptedName = { Name:string; Id:int; Checksum:string }
+
+    let parse (input:string) =
+        input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+        |> Seq.map (fun line ->
+            match line with
+            | Regex "(.*)\-(\d+)\[(.*)\]" (name::textId::checksum::[]) -> 
+                Some { Name = name; Id = Integer.Parse textId; Checksum = checksum}
+            | _ -> None)
+        |> Seq.choose identity
+        |> Seq.toArray
+
+    let getValidNames encryptedNames =
+        encryptedNames
+        |> Seq.filter (fun encryptedName ->
+            let sum =
+                encryptedName.Name
+                |> Seq.countBy identity
+                |> Seq.sortWith (fun (char1, count1) (char2, count2) ->
+                    if char1 = '-' then 1
+                    elif char2 = '-' then -1
+                    elif count1 > count2 then -1
+                    elif count2 > count1 then 1
+                    elif char1 < char2 then -1
+                    elif char2 < char1 then 1
+                    else 0)
+                |> Seq.take 5
+                |> Seq.map fst
+                |> asFirst ""
+                ||> Seq.fold (fun text char -> sprintf "%s%c" text char)
+            encryptedName.Checksum = sum)
+
+    let getSumOfIdsForValidNames encryptedNames =
+        encryptedNames
+        |> getValidNames
+        |> Seq.sumBy (fun encryptedName -> encryptedName.Id)
+
+    let getRoomId encryptedNames =
+        encryptedNames
+        |> getValidNames
+        |> Seq.map (fun encryptedName ->
+            let decryptedName =
+                encryptedName.Name
+                |> Seq.map (fun c ->
+                    if c = '-' then ' '
+                    else
+                        let asdf = ((c |> int) - ('a' |> int) + encryptedName.Id) % 26
+                        let asdf = asdf + ('a' |> int)
+                        asdf |> char)
+                |> asFirst ""
+                ||> Seq.fold (fun text char -> sprintf "%s%c" text char)
+            decryptedName, encryptedName.Id)
+        |> Seq.filter (fun (decryptedName, _) -> 
+            decryptedName.Contains("northpole object storage"))
+        |> Seq.map snd
+        |> Seq.head
+
+
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2016.04.txt"
 
-        let result1 = 0
+        let encryptedNames = input |> parse
 
-        let result2 = 0
+        let result1 = encryptedNames |> getSumOfIdsForValidNames
+
+        let result2 = encryptedNames |> getRoomId
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
