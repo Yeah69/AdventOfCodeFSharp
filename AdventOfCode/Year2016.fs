@@ -244,14 +244,43 @@ module Day4 =
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day5 =
+    let generateHash input =
+        seq { 0 .. Integer.MaxValue }
+        |> Seq.map (fun i -> sprintf "%s%d" input i)
+        |> Seq.map (fun source -> System.Text.Encoding.ASCII.GetBytes(source) |> md5)
+        |> Seq.filter (fun hash -> hash.StartsWith("00000"))
+
+    let getPassword input = 
+        input
+        |> generateHash
+        |> Seq.take 8
+        |> Seq.map (fun hash -> hash.Chars 5)
+        |> asFirst ""
+        ||> Seq.fold (fun text char -> sprintf "%s%c" text char)
+        
+    let getSecondPassword input = 
+        let map =
+            input
+            |> generateHash
+            |> Seq.where (fun hash ->
+                let pos = hash.Chars 5
+                pos >= '0' && pos <= '7')
+            |> Seq.map (fun hash -> hash.Chars 5, hash.Chars 6)
+            |> asFirst Map.empty
+            ||> Seq.scan (fun map (pos, char) -> 
+                if map |> Map.containsKey pos then map else map |> Map.add pos char)
+            |> Seq.filter (fun map -> map |> Map.count = 8)
+            |> Seq.head
+        sprintf "%c%c%c%c%c%c%c%c" (map |> Map.find '0') (map |> Map.find '1') (map |> Map.find '2') (map |> Map.find '3') (map |> Map.find '4') (map |> Map.find '5') (map |> Map.find '6') (map |> Map.find '7')
+
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2016.05.txt"
 
-        let result1 = 0
+        let result1 = input |> getPassword
 
-        let result2 = 0
+        let result2 = input |> getSecondPassword
 
-        { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
+        { First = result1; Second = result2 }
 
 module Day6 =
     let go() =
