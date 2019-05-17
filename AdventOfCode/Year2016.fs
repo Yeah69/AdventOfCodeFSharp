@@ -283,14 +283,31 @@ module Day5 =
         { First = result1; Second = result2 }
 
 module Day6 =
+    let parse (input:string) =
+        let lines = input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+        let min =
+            lines
+            |> Seq.map (fun line -> line.Length)
+            |> Seq.min
+        lines, min
+
+    let decode picker lines min =
+        seq { 0 .. (min - 1) }
+        |> Seq.map (fun i -> lines |> Seq.map (fun (line:string) -> line.Chars i) |> Seq.toList)
+        |> Seq.map (fun column -> (column |> Seq.countBy identity |> picker snd) |> fst)
+        |> asFirst ""
+        ||> Seq.fold (fun text char -> sprintf "%s%c" text char)
+        
+
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2016.06.txt"
+        let linesAndMin = input |> parse
+            
+        let result1 = linesAndMin ||> decode Seq.maxBy
 
-        let result1 = 0
+        let result2 = linesAndMin ||> decode Seq.minBy
 
-        let result2 = 0
-
-        { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
+        { First = result1; Second = result2 }
 
 module Day7 =
     let go() =
