@@ -220,9 +220,7 @@ module Day4 =
                 |> Seq.map (fun c ->
                     if c = '-' then ' '
                     else
-                        let asdf = ((c |> int) - ('a' |> int) + encryptedName.Id) % 26
-                        let asdf = asdf + ('a' |> int)
-                        asdf |> char)
+                        (((c |> int) - ('a' |> int) + encryptedName.Id) % 26 + ('a' |> int)) |> char)
                 |> asFirst ""
                 ||> Seq.fold (fun text char -> sprintf "%s%c" text char)
             decryptedName, encryptedName.Id)
@@ -310,12 +308,48 @@ module Day6 =
         { First = result1; Second = result2 }
 
 module Day7 =
+    type IPv7 = { Ips:string list; Hypernets:string list; }
+
+    let parse (input:string) =
+        let getLists (input:string) =
+            let firstSplit = input.Split([| '[' |], System.StringSplitOptions.None)
+            let firstIp = (firstSplit |> Array.head)::[]
+            firstSplit
+            |> Seq.skip 1
+            |> asFirst (firstIp, [])
+            ||> Seq.fold (fun (ips, hypernets) segment ->
+                let parts = segment.Split([| ']' |], System.StringSplitOptions.None)
+                parts.[1]::ips, parts.[0]::hypernets)
+
+        input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+        |> Seq.map (fun line -> 
+            let (ips, hypernets) = getLists line
+            { Ips = ips; Hypernets = hypernets})
+
+    let doesSupportTLS ipv7 =
+        let containsABBA (text:string) =
+            seq { 0 .. text.Length - 4 }
+            |> Seq.exists (fun i -> text.Chars i <> text.Chars (i + 1) && text.Chars i = text.Chars (i + 3) && text.Chars (i + 1) = text.Chars (i + 2))
+
+        ipv7.Ips |> List.exists containsABBA && ipv7.Hypernets |> List.exists containsABBA |> not
+                
+    let doesSupportSSL ipv7 =
+        let getABAs (text:string) =
+            seq { 0 .. text.Length - 3 }
+            |> Seq.filter (fun i -> text.Chars i <> text.Chars (i + 1) && text.Chars i = text.Chars (i + 2))
+            |> Seq.map (fun i -> text.Chars i, text.Chars (i + 1))
+
+        ipv7.Ips 
+        |> Seq.collect (fun ip -> ip |> getABAs) 
+        |> Seq.allPairs (ipv7.Hypernets |> Seq.collect (fun ip -> ip |> getABAs))
+        |> Seq.exists (fun ((a1, b1), (a2, b2)) -> a1 = b2 && b1 = a2)
+
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2016.07.txt"
 
-        let result1 = 0
+        let result1 = input |> parse |> Seq.filter doesSupportTLS |> Seq.length
 
-        let result2 = 0
+        let result2 = input |> parse |> Seq.filter doesSupportSSL |> Seq.length
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
