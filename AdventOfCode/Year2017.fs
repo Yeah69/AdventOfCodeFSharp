@@ -123,12 +123,29 @@ module Day3 =
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day4 =
+    let parse (input:string) =
+        input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+        |> Seq.map (fun line -> line.Split([| ' ' |], System.StringSplitOptions.None) |> Seq.toList)
+        |> Seq.toList
+        
+    let solve wordPreprocessor listOfWords =
+        listOfWords
+        |> Seq.filter (fun words -> 
+            words 
+            |> wordPreprocessor
+            |> Seq.countBy identity 
+            |> Seq.exists (fun (_, count) -> count > 1) 
+            |> not)
+        |> Seq.length
+
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2017.04.txt"
 
-        let result1 = 0
+        let listOfWords = input |> parse
 
-        let result2 = 0
+        let result1 = listOfWords |> solve identity
+
+        let result2 = listOfWords |> solve (Seq.map(fun word -> word |> Seq.sort |> asFirst "" ||> Seq.fold (fun text c -> sprintf "%s%c" text c)))
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
