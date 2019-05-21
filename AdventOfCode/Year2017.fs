@@ -150,12 +150,31 @@ module Day4 =
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day5 =
+    let parse (input:string) =
+        input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+        |> Array.map Integer.Parse
+
+    let solve decreasePredicate instructions =
+        0
+        |> Seq.unfold (fun i ->
+            if i < 0 || i >= (instructions |> Array.length) then None
+            else
+                let value = ((instructions, i) ||> Array.get)
+                (instructions, i, if decreasePredicate value then value - 1 else value + 1) |||> Array.set 
+                let nextI = i + value
+                Some (nextI, nextI))
+        |> Seq.length
+
+    let solveFirst = solve (fun _ -> false)
+
+    let solveSecond = solve (fun i -> i >= 3)
+
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2017.05.txt"
 
-        let result1 = 0
+        let result1 = input |> parse |> solveFirst
 
-        let result2 = 0
+        let result2 = input |> parse |> solveSecond
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
