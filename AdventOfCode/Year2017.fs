@@ -179,12 +179,46 @@ module Day5 =
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day6 =
+    let parse (input:string) =
+        input.Split([| '\t' |], System.StringSplitOptions.None)
+        |> Array.map Integer.Parse
+
+    let memoryReallocation memory =
+        let map = Map.empty |> Map.add (memory |> Array.toList) 0
+        (0, map, false)
+        |> Seq.unfold (fun (prevStep, map, abort) ->
+            if abort then None
+            else
+                let max = memory |> Array.max
+                let index = 
+                    memory 
+                    |> Seq.mapi (fun i m -> i, m) 
+                    |> Seq.filter (fun (_, m) -> m = max) 
+                    |> Seq.head 
+                    |> fst
+                let portion = max / memory.Length
+                let modulo = max % memory.Length
+                (index, 0) ||> Array.set memory
+                seq { 0 .. (modulo - 1) }
+                |> Seq.map (fun i -> (index + i + 1) % memory.Length)
+                |> Seq.iter (fun i -> (i, (i |> Array.get memory) + portion + 1) ||> Array.set memory)
+                seq { modulo .. memory.Length - 1 }
+                |> Seq.map (fun i -> (index + i + 1) % memory.Length)
+                |> Seq.iter (fun i -> (i, (i |> Array.get memory) + portion) ||> Array.set memory)
+                let thisState = memory |> Array.toList
+                let step = prevStep + 1
+                match map |> Map.tryFind thisState with
+                | Some firstOccurence -> Some ((step, step - firstOccurence), (step, map, true))
+                | None -> 
+                    let map = map |> Map.add thisState step
+                    Some ((step, step), (step, map, false)))
+        |> Seq.last
+        
+
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2017.06.txt"
 
-        let result1 = 0
-
-        let result2 = 0
+        let (result1, result2) = input |> parse |> memoryReallocation
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
