@@ -223,14 +223,74 @@ module Day6 =
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day7 =
+    type Node = { Label:string; Value:int; Children: Node list }
+    
+    let parse (input:string) =
+        let lines = input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+        let nodeMap =
+            lines
+            |> Seq.choose (fun line ->
+                match line with
+                | Regex "(.+) \((\d+)\)" (label::textValue::[]) -> Some { Label = label; Value = Integer.Parse textValue; Children = [] }
+                | _ -> None)
+            |> Seq.map (fun node -> node.Label, node)
+            |> Map.ofSeq
+        let childrenMap =
+            lines
+            |> Seq.choose (fun line ->
+                match line with
+                | Regex "(.+) \(\d+\) \-\> (.*)" (label::textChildren::[]) -> Some (label, textChildren.Split([| ", " |], System.StringSplitOptions.None) |> Array.toList)
+                | Regex "(.+) \(\d+\)" (label::[]) -> Some (label, [])
+                | _ -> None)
+            |> Map.ofSeq
+        nodeMap, childrenMap
+
+    let getRoot nodeMap childrenMap =
+        nodeMap 
+        |> Map.toSeq
+        |> Seq.map (fun (key, _) -> key)
+        |> Seq.filter (fun label -> 
+            childrenMap 
+            |> Map.toSeq 
+            |> Seq.exists(fun (_, value) -> value |> Seq.exists (fun l -> l = label)) 
+            |> not)
+        |> Seq.exactlyOne
+
+    let rec calculateWeightOrDetermineError label nodeMap childrenMap =
+        let children = childrenMap |> Map.find label
+        let value = (nodeMap |> Map.find label).Value
+        if children |> List.isEmpty then
+            value, None
+        else
+            let childrenResults =
+                children
+                |> Seq.map (fun childLabel -> childLabel, (nodeMap, childrenMap) ||> calculateWeightOrDetermineError childLabel)
+                |> Seq.toList
+            match childrenResults |> List.tryPick (snd >> snd) with
+            | Some x -> value, Some x
+            | None ->
+                let counts =
+                    childrenResults
+                    |> Seq.map (snd >> fst)
+                    |> Seq.countBy identity
+                    |> Seq.toArray
+                if counts.Length = 1 then value + (counts.[0] |> fst) * (counts.[0] |> snd), None
+                else
+                    let min = counts |> Seq.minBy snd |> fst
+                    let max = counts |> Seq.maxBy snd |> fst
+                    let childLabel = childrenResults |> Seq.filter (fun (_, (v, _)) -> v = min) |> Seq.map fst |> Seq.head
+                    value, Some ((nodeMap |> Map.find childLabel).Value + max - min)
+
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2017.07.txt"
 
-        let result1 = 0
+        let maps = input |> parse
 
-        let result2 = 0
+        let result1 = maps ||> getRoot
 
-        { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
+        let result2 = maps ||> calculateWeightOrDetermineError result1 |> snd |> Option.defaultValue 0
+
+        { First = result1; Second = sprintf "%d" result2 }
 
 module Day8 =
     let go() =
