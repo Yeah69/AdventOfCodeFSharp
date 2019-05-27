@@ -293,12 +293,67 @@ module Day7 =
         { First = result1; Second = sprintf "%d" result2 }
 
 module Day8 =
+    open System
+    type Operator = | Increase | Decrease
+    type Comparator = | Equal | Unequal | Greater | GreaterOrEqual | Less | LessOrEqual 
+    type Execution = { Identifier:string; Operator:Operator; Value:int }
+    type Condition = { Identifier:string; Comparator:Comparator; Value:int }
+    
+    type Instruction = { Execution:Execution; Condition:Condition }
+    
+    let parse (input:string) =
+        input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+        |> Seq.choose (fun line -> 
+            match line with
+            | Regex "(.+) (inc|dec) (.+) if (.+) (==|!=|\>|\<|\<=|\>=) (.+)" (exeId::op::exeVal::condId::comp::condVal::[]) ->
+                let operator = match op with | "inc" -> Increase | _ -> Decrease
+                let exeValue = Integer.Parse exeVal
+                let comparator = match comp with | "==" -> Equal | "!=" -> Unequal | ">" -> Greater | ">=" -> GreaterOrEqual | "<" -> Less | _ -> LessOrEqual
+                let condValue = Integer.Parse condVal
+                Some { Execution = { Identifier = exeId; Operator = operator; Value = exeValue }; Condition = { Identifier = condId; Comparator = comparator; Value = condValue } }
+            | _ -> None)
+        |> Seq.toList
+
+    let initialize instructions =
+        instructions
+        |> Seq.collect (fun instruction -> seq { yield instruction.Execution.Identifier; yield instruction.Condition.Identifier })
+        |> Seq.distinct
+        |> Seq.map (fun identifier -> identifier, 0)
+        |> Map.ofSeq
+
+    let execute map (execution:Execution) = 
+        let currentValue = map |> Map.find execution.Identifier
+        let nextValue =
+            match execution.Operator with
+            | Increase -> currentValue + execution.Value
+            | Decrease -> currentValue - execution.Value
+        map |> Map.remove execution.Identifier |> Map.add execution.Identifier nextValue
+
+    let checkCondition map condition =
+        let value = map  |> Map.find condition.Identifier
+        match condition.Comparator with
+        | Equal -> value = condition.Value
+        | Unequal -> value <> condition.Value
+        | Greater -> value > condition.Value
+        | Less -> value < condition.Value
+        | GreaterOrEqual -> value >= condition.Value
+        | LessOrEqual -> value <= condition.Value
+
+    let iterateInstructions instructions =
+        let getMaxOf m = m |> Map.toSeq |> Seq.map snd |> Seq.max
+
+        let map = instructions |> initialize
+        let (map, globalMax) =
+            ((map, Integer.MinValue), instructions)
+            ||> Seq.fold (fun (map, currentMax) instruction ->
+                let map = if instruction.Condition |> checkCondition map then instruction.Execution |> execute map else map
+                (map, Math.Max(map |> getMaxOf, currentMax)))
+        map |> getMaxOf, globalMax
+
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2017.08.txt"
 
-        let result1 = 0
-
-        let result2 = 0
+        let (result1, result2) = input |> parse |> iterateInstructions
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
