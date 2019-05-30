@@ -358,12 +358,27 @@ module Day8 =
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day9 =
+    type State = | OutsideOfGarbage | InsideOfGarbage | InsideOfGarbageAndIgnoreNext
+
+    let traverse (input:string) =
+        let (_, score, letters, _) =
+            ((OutsideOfGarbage, 0, 0, 1), input)
+            ||> Seq.fold (fun (state, score, letters, level) c ->
+                match state, c with
+                | OutsideOfGarbage, '{' -> state, score + level, letters, level + 1
+                | OutsideOfGarbage, '}' -> state, score, letters, level - 1
+                | OutsideOfGarbage, '<' -> InsideOfGarbage, score, letters, level
+                | OutsideOfGarbage, _ -> state, score, letters, level
+                | InsideOfGarbage, '>' -> OutsideOfGarbage, score, letters, level
+                | InsideOfGarbage, '!' -> InsideOfGarbageAndIgnoreNext, score, letters, level
+                | InsideOfGarbage, _ -> InsideOfGarbage, score, letters + 1, level
+                | InsideOfGarbageAndIgnoreNext, _ -> InsideOfGarbage, score, letters, level)
+        score, letters
+
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2017.09.txt"
 
-        let result1 = 0
-
-        let result2 = 0
+        let (result1, result2) = input |> traverse
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
