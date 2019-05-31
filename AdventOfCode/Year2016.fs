@@ -354,14 +354,56 @@ module Day7 =
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day8 =
+    type Instruction = | Rect of Width:int * Height:int| RotateRow of Row:int * By:int | RotateColumn of Column:int * By:int
+
+    let parse (input:string) =
+        input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+        |> Seq.choose (fun line -> 
+            match line with
+            | Regex "rect (\d+)x(\d+)" (textWidth::textHeight::[]) -> Some(Rect(Integer.Parse textWidth, Integer.Parse textHeight))
+            | Regex "rotate row y=(\d+) by (\d+)" (textRow::textBy::[]) -> Some(RotateRow(Integer.Parse textRow, Integer.Parse textBy))
+            | Regex "rotate column x=(\d+) by (\d+)" (textColumn::textBy::[]) -> Some(RotateColumn(Integer.Parse textColumn, Integer.Parse textBy))
+            | _ -> None)
+        |> Seq.toList
+
+    let execute instruction array =
+        match instruction with
+        | Rect (width, height) -> 
+            seq { 0 .. height - 1} 
+            |> Seq.allPairs (seq { 0 .. width - 1 }) 
+            |> Seq.iter (fun (x,y) -> (x, y, true) |||> Array2D.set array)
+        | RotateRow (row, by) ->
+            let slice =
+                array 
+                |> Array2DgetRow row 
+            seq { 0 .. slice.Length - 1 }
+            |> Seq.iter (fun i ->
+                ((i + by) % slice.Length, row, slice.[i]) |||> Array2D.set array)
+        | RotateColumn (column, by) ->
+            let slice =
+                array 
+                |> Array2DgetColumn column 
+            seq { 0 .. slice.Length - 1 }
+            |> Seq.iter (fun i ->
+                (column, (i + by) % slice.Length, slice.[i]) |||> Array2D.set array)
+    
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2016.08.txt"
 
-        let result1 = 0
+        let field = Array2D.init 50 6 (fun _ _ -> false)
 
-        let result2 = 0
+        input |> parse |> Seq.iter (fun instruction -> field |> execute instruction)
 
-        { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
+        seq { 0 .. 5 }
+        |> Seq.iter (fun row ->
+            printfn "%s" (field |> Array2DgetRow row |> asFirst "" ||> Seq.fold (fun text b -> if b then sprintf "%s%c" text '#' else sprintf "%s%c" text '.')))
+        printfn ""
+
+        let result1 = field |> Seq.cast |> Seq.filter identity |> Seq.length
+
+        let result2 = "EOARGPHYAO" // is printed to console above
+
+        { First = sprintf "%d" result1; Second = result2 }
 
 module Day9 =
     let go() =

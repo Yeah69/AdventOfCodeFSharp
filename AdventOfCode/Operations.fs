@@ -44,3 +44,11 @@ let (|Integer|_|) text =
     else None
     
 let identity x = x
+
+let Array2Dflatten (A:'a[,]) = A |> Seq.cast<'a>
+
+let Array2DgetColumn c (A:_[,]) =
+    Array2Dflatten A.[c..c,*] |> Seq.toArray
+
+let Array2DgetRow r (A:_[,]) =
+    Array2Dflatten A.[*,r..r] |> Seq.toArray  
