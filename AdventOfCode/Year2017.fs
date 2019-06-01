@@ -383,14 +383,49 @@ module Day9 =
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day10 =
+    let parseFirst (input:string) =
+        input.Split([| "," |], System.StringSplitOptions.None)
+        |> Array.map Integer.Parse
+
+    let parseSecond (input:string) =
+        ([| for c in input do yield c |> int |], [| 17; 31; 73; 47; 23 |]) ||> Array.append
+
+    let round pos skip (lengths: int array) (field: byte array) =
+        ((pos, skip), lengths)
+        ||> Array.fold (fun (pos, skip) length ->
+            let reversedSection = Array.init length (fun i -> field.[(pos + i) % field.Length]) |> Array.rev
+            seq { 0 .. length - 1} 
+            |> Seq.iter (fun i -> 
+                field.[(pos + i) % field.Length] <- reversedSection.[i])
+            (pos + length + skip) % field.Length, skip + 1)
+            
+    let solveFirst input =
+        let field = [| 0uy .. 255uy |]
+        let lengths = input |> parseFirst
+        let _ = round 0 0 lengths field
+        (field.[0] |> int) * (field.[1] |> int)
+                    
+    let solveSecond input =
+        let field = [| 0uy .. 255uy |]
+        let lengths = input |> parseSecond
+        let _ = 
+            ((0, 0), seq { 0 .. 63 }) 
+            ||> Seq.fold (fun (pos, skip) _ -> round pos skip lengths field)
+        field 
+        |> Seq.chunkBySize 16 
+        |> Seq.map (fun bytes -> (0uy, bytes) ||> Seq.fold (^^^))
+        |> Seq.map (fun byte -> System.String.Format("{0:X2}", byte).ToLower())
+        |> String.concat ""
+        
+    
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2017.10.txt"
 
-        let result1 = 0
+        let result1 = input |> solveFirst
 
-        let result2 = 0
+        let result2 = input |> solveSecond
 
-        { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
+        { First = sprintf "%d" result1; Second = result2 }
 
 module Day11 =
     let go() =

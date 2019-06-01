@@ -37,6 +37,7 @@ let (|Regex|_|) pattern input =
     
 type Integer = int
 type Long = int64
+type Byte = byte
     
 let (|Integer|_|) text =
     let (isSuccess, number) = Integer.TryParse text
