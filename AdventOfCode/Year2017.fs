@@ -428,12 +428,77 @@ module Day10 =
         { First = sprintf "%d" result1; Second = result2 }
 
 module Day11 =
+    open System
+    
+    let parse (input:string) =
+        input.Split([| "," |], System.StringSplitOptions.None)
+
+    let round instructions = 
+        let compareOpposites firstSide secondSide map =
+            let (firstValue, secondValue) = map |> Map.tryFind firstSide, map |> Map.tryFind secondSide
+            let (firstValue, secondValue) =
+                match firstValue, secondValue with
+                | Some fv, Some sv when fv > sv -> fv - sv, 0
+                | Some fv, Some sv when sv >= fv -> 0, sv - fv
+                | Some fv, None -> fv, 0
+                | None, Some sv -> 0, sv
+                | _ -> 0, 0
+            map 
+            |> Map.remove firstSide 
+            |> Map.remove secondSide
+            |> Map.add firstSide firstValue
+            |> Map.add secondSide secondValue
+
+        let adjustDirection counterclockwise middle clockwise map =
+            let (ccValue, cValue) = map |> Map.find counterclockwise, map |> Map.find clockwise
+            if ccValue > 0 && cValue > 0 then
+                let diff = Math.Min(ccValue, cValue)
+                let mValue = map |> Map.find middle
+                let map = 
+                    map
+                    |> Map.remove counterclockwise
+                    |> Map.remove clockwise
+                    |> Map.remove middle
+                    |> Map.add middle (mValue + diff)
+                    |> Map.add counterclockwise (ccValue - diff)
+                    |> Map.add clockwise (cValue - diff)
+                true, map
+            else false, map
+            
+        instructions 
+        |> Seq.countBy identity 
+        |> Map.ofSeq
+        |> compareOpposites "n" "s"
+        |> compareOpposites "ne" "sw"
+        |> compareOpposites "nw" "se"
+        |> asFirst false
+        |> asSecond (seq { 
+                            yield "se", "s", "sw";
+                            yield "s", "sw", "nw";
+                            yield "sw", "nw", "n";
+                            yield "nw", "n", "ne";
+                            yield "n", "ne", "se";
+                            yield "ne", "se", "s"})
+        ||> Seq.fold (fun (abort, map) (cc, m, c) ->
+            if abort then true, map 
+            else map |> adjustDirection cc m c)
+        |> snd
+        |> Map.toSeq
+        |> Seq.map snd
+        |> Seq.sum
+
+
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2017.11.txt"
 
-        let result1 = 0
+        let instructions = input |> parse
 
-        let result2 = 0
+        let result1 = instructions |> round
+
+        let result2 = 
+            seq { 1 .. instructions.Length } 
+            |> Seq.map (fun i -> instructions |> Seq.take i |> round) 
+            |> Seq.max
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
