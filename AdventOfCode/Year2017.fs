@@ -503,12 +503,43 @@ module Day11 =
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day12 =
+    let parse (input:string) =
+        input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+        |> Seq.choose (fun line ->
+            match line with
+            | Regex "(\d+) <-> (.+)" (textKey::textAdjacents::[]) -> Some (Integer.Parse textKey, textAdjacents.Split([| ", " |], System.StringSplitOptions.None) |> Seq.map Integer.Parse |> Seq.toList)
+            | _ -> None)
+        |> Map.ofSeq
+
+    let rec visit map current visited remaining =
+        let visited = visited |> Set.add current
+        let remaining = remaining |> Set.remove current
+        let toIterate = map |> Map.find current |> List.where (fun key -> remaining |> Set.contains key)
+        if toIterate |> List.length = 0 then
+            visited, remaining
+        else
+            ((visited, remaining), toIterate)
+            ||> Seq.fold (fun (visited, remaining) key ->
+                visit map key visited remaining)
+        
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2017.12.txt"
 
-        let result1 = 0
+        let map = input |> parse
 
-        let result2 = 0
+        let visit = visit map
+
+        let (visited, remaining) = visit 0 Set.empty (seq { 0 .. 1999 } |> Set.ofSeq)
+
+        let result1 = visited |> Set.count
+
+        let result2 = 
+            (visited, remaining) 
+            |> Seq.unfold (fun (visited, remaining) -> 
+               if remaining |> Set.count = 0 then None
+               else Some (1, visit (remaining |> Seq.head) visited remaining))
+            |> Seq.sum
+        let result2 = result2 + 1
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
