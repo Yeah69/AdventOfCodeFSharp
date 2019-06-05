@@ -544,12 +544,37 @@ module Day12 =
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day13 =
+    let parse (input:string) =
+        input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+        |> Seq.choose (fun line -> 
+            match line with 
+            | Regex "(\d+): (\d+)" (textDepth::textRange::[]) -> Some(textDepth |> Integer.Parse, textRange |> Integer.Parse)
+            | _ -> None)
+        |> Seq.toList
+        
+    let solveFirst firewall =
+        (0, firewall) 
+        ||> Seq.fold (fun severity (depth, range) ->
+            if depth % (2 * range - 2) = 0 then severity + depth * range
+            else severity)
+                    
+    let solveSecond firewall =
+        seq { 0 .. Integer.MaxValue }
+        |> Seq.where (fun delay ->
+            firewall
+            |> Seq.exists (fun (depth, range) ->
+                (depth + delay) % (2 * range - 2) = 0)
+            |> not)
+        |> Seq.head
+
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2017.13.txt"
 
-        let result1 = 0
+        let firewall = input |> parse
 
-        let result2 = 0
+        let result1 = firewall |> solveFirst
+
+        let result2 = firewall |> solveSecond
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
