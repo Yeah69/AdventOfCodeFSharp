@@ -638,12 +638,39 @@ module Day14 =
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day15 =
+    let modFactor = Integer.MaxValue |> int64
+
+    let parse (input:string) =
+        let result =
+            match input with
+            | Regex "Generator A starts with (\d+)(?:\\r\\n|\\r|\\n)Generator B starts with (\d+)" (textA::textB::[]) -> Some (Long.Parse textA, Long.Parse textB)
+            | _ -> None
+        result |> Option.defaultValue (0L, 0L)
+
+    let countMatches filterA filterB initialA initialB countOfRounds =
+        let seq initial factor filter =
+            initial 
+            |> Seq.unfold (fun value -> 
+                let next = (value * factor) % modFactor
+                Some(next, next))
+            |> Seq.filter filter
+            |> Seq.map (fun value -> value <<< 48)
+
+        (seq initialA 16_807L filterA, seq initialB 48_271L filterB)
+        ||> Seq.map2 (=)
+        |> Seq.take countOfRounds
+        |> Seq.filter identity
+        |> Seq.length
+
+
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2017.15.txt"
 
-        let result1 = 0
+        let (initialA, initialB) = input |> parse
 
-        let result2 = 0
+        let result1 = (initialA, initialB, 40_000_000) |||> countMatches alwaysTrue alwaysTrue
+
+        let result2 = (initialA, initialB, 5_000_000) |||> countMatches (fun a -> a % 4L = 0L) (fun b -> b % 8L = 0L)
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 

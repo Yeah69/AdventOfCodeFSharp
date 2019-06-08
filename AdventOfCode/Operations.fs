@@ -53,3 +53,6 @@ let Array2DgetColumn c (A:_[,]) =
 
 let Array2DgetRow r (A:_[,]) =
     Array2Dflatten A.[*,r..r] |> Seq.toArray  
+    
+let alwaysTrue _ = true
+let alwaysFalse _ = false
