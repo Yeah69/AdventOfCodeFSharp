@@ -405,7 +405,7 @@ module Day10 =
         let _ = round 0 0 lengths field
         (field.[0] |> int) * (field.[1] |> int)
                     
-    let solveSecond input =
+    let knotHash input =
         let field = [| 0uy .. 255uy |]
         let lengths = input |> parseSecond
         let _ = 
@@ -423,7 +423,7 @@ module Day10 =
 
         let result1 = input |> solveFirst
 
-        let result2 = input |> solveSecond
+        let result2 = input |> knotHash
 
         { First = sprintf "%d" result1; Second = result2 }
 
@@ -579,12 +579,61 @@ module Day13 =
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day14 =
+    let parse input =
+        seq { 0 .. 127 }
+        |> Seq.map (fun i -> sprintf "%s-%d" input i)
+        |> Seq.map Day10.knotHash
+        |> Seq.map (fun hash -> 
+            hash 
+            |> Seq.collect (fun c -> 
+                let number = 
+                    if c >= '0' && c <= '9' then ((c |> int) - ('0' |> int))
+                    else ((c |> int) - ('a' |> int)) + 10
+                seq { yield (number &&& 8) > 0; yield (number &&& 4) > 0; yield (number &&& 2) > 0; yield (number &&& 1) > 0; })
+            |> Seq.toArray)
+        |> Seq.toArray
+
+    let countTurnedOn field =
+        field |> Seq.collect identity |> Seq.filter identity |> Seq.length
+
+    let turnedOnPositions field =
+        field 
+        |> Seq.mapi (fun y arr -> y, arr) 
+        |> Seq.collect (fun (y, arr) -> 
+            arr 
+            |> Seq.mapi (fun x value -> x, value) 
+            |> Seq.filter snd 
+            |> Seq.map (fun (x, _) -> x, y))
+        |> Set.ofSeq
+
+    let countRegions field =
+        let turnedOnRegionSet = field |> turnedOnPositions
+        let rec inner availableSet seedPoint =
+            let availableSet = 
+                (availableSet, [ seedPoint ]) 
+                |> Seq.unfold (fun (availableSet, points) ->
+                    if points |> List.isEmpty then None
+                    else
+                        let availableSet = (availableSet, points) ||> Seq.fold (fun set point -> set |> Set.remove point)
+                        let nextPoints =
+                            points 
+                            |> Seq.collect (fun (x, y) -> seq { yield x - 1, y; yield x + 1, y; yield x, y - 1; yield x, y + 1 })
+                            |> Seq.filter (fun point -> availableSet |> Set.contains point)
+                            |> Seq.toList
+                        Some(availableSet, (availableSet, nextPoints)))
+                |> Seq.last
+            if availableSet |> Seq.length > 0 then 1 + inner availableSet (availableSet |> Seq.head)
+            else 1
+        inner turnedOnRegionSet (turnedOnRegionSet |> Seq.head)
+            
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2017.14.txt"
 
-        let result1 = 0
+        let field = input |> parse
 
-        let result2 = 0
+        let result1 = field |> countTurnedOn
+
+        let result2 = field |> countRegions
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
