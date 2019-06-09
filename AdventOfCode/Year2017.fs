@@ -675,14 +675,78 @@ module Day15 =
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day16 =
+    type Instruction = | Spin of int | Exchange of int * int | Partner of char * char
+
+    let aAsInt = 'a' |> int
+
+    let parse (input:string) =
+        input.Split([| "," |], System.StringSplitOptions.None)
+        |> Array.choose (fun line ->
+            match line with
+            | Regex "s(\d+)" (textX::[]) -> Some (Spin (textX |> Integer.Parse))
+            | Regex "x(\d+)/(\d+)" (textX::textY::[]) -> Some (Exchange (textX |> Integer.Parse, textY |> Integer.Parse))
+            | Regex "p(.)/(.)" (textA::textB::[]) -> Some (Partner (textA.Chars 0, textB.Chars 0))
+            | _ -> None)
+
+    let toOffsetAndMaps instructions =
+        ((0, [| 0 .. 15 |], [| 0 .. 15 |]), instructions)
+        ||> Seq.fold (fun (offset, xMap, pMap) instruction ->
+            match instruction with
+            | Spin x -> offset + x, xMap, pMap
+            | Exchange (x, y) ->
+                let prepareIndex index =
+                    let index = (index - offset) % 16
+                    if index < 0 then index + 16 else index
+                let (x, y) = prepareIndex x, prepareIndex y
+                let (one, two) = xMap.[x], xMap.[y]
+                xMap.[x] <- two
+                xMap.[y] <- one
+                offset, xMap, pMap
+            | Partner (a, b) ->
+                let (x, y) = (a |> int) - aAsInt, (b |> int) - aAsInt
+                let (o, t) = pMap.[x], pMap.[y]
+                pMap.[x] <- t
+                pMap.[y] <- o
+                offset, xMap, pMap)
+
+    let dance (poses: char array) offset xMap pMap =
+        let poses = xMap |> Array.map (fun i -> poses.[i])
+        let pArr = Array.create 16 0
+        poses |> Array.iteri (fun i c -> pArr.[(c |> int) - aAsInt] <- i)
+        let pArr = pMap |> Array.map (fun i -> pArr.[i])
+        pArr |> Array.iteri (fun i c -> poses.[c] <- (i + aAsInt) |> char)
+        let result = Array.create 16 'a'
+        seq { 0 .. 15 } |> Seq.iter (fun i -> result.[(i + offset - 1) % 16] <- poses.[(i + offset) % 16])
+        result
+
+    let billionDances (positions: char array) offset xMap pMap =
+        let (offset, positions, i) =
+            ((offset, positions, 2), seq { 2 .. 1_000_000_000 })
+            ||> Seq.scan (fun (offset, positions, _) i -> 
+                offset % 16 + offset, (offset, xMap, pMap) |||> dance positions, i)
+            |> Seq.filter (fun (_, positions, i) -> 
+                (positions |> Seq.mapi (fun i c -> i, c) |> Seq.exists (fun (i, c) -> i + aAsInt <> (c |> int)) |> not) || i = 1_000_000_000)
+            |> Seq.head
+        if i = 1_000_000_000 then positions
+        else 
+            let remainder = 1_000_000_000 % i
+            (positions, seq { 0 .. remainder - 1})
+            ||> Seq.fold (fun positions _ -> (offset, xMap, pMap) |||> dance positions)
+
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2017.16.txt"
 
-        let result1 = 0
+        let (offset, xMap, yMap) = input |> parse |> toOffsetAndMaps
 
-        let result2 = 0
+        let firstDance = (offset, xMap, yMap) |||> dance [| 'a' .. 'p' |]
 
-        { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
+        let result1 = firstDance |> Seq.map (fun c -> c.ToString()) |> String.concat ""
+
+        let afterOneBillionDances = (offset, xMap, yMap) |||> billionDances firstDance
+
+        let result2 = afterOneBillionDances |> Seq.map (fun c -> c.ToString()) |> String.concat ""
+
+        { First = result1; Second = result2 }
 
 module Day17 =
     let go() =
