@@ -749,22 +749,186 @@ module Day16 =
         { First = result1; Second = result2 }
 
 module Day17 =
+    let parse (input:string) = input |> Integer.Parse
+
+    type Node = { Value: int; mutable Next: Node option}
+
+    let runFirst skipCount =
+        let initialNode = { Value = 0; Next = None }
+        initialNode.Next <- Some initialNode
+        let resultNode =
+            (initialNode, seq { 1 .. 2017 })
+            ||> Seq.fold (fun node i ->
+                let nextNode = 
+                    (node, seq  { 1 .. skipCount - 1 })
+                    ||> Seq.fold (fun node _ -> match node.Next with | Some node -> node | None -> node)
+                let newNode = { Value = i; Next = nextNode.Next }
+                nextNode.Next <- Some newNode
+                newNode.Next |> Option.defaultValue nextNode)
+        resultNode.Value
+
+    let runSecond skipCount =
+        ((1, 1), seq { 2 .. 50_000_000 })
+        ||> Seq.fold (fun (currentNextToZero, currentPosition) i ->
+            let nextPosition = (currentPosition + skipCount) % i
+            (if nextPosition = 0 then i else currentNextToZero), nextPosition + 1)
+        |> fst
+    
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2017.17.txt"
 
-        let result1 = 0
+        let result1 = input |> parse |> runFirst
 
-        let result2 = 0
+        let result2 = input |> parse |> runSecond
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day18 =
+    open FSharpx.Collections
+    type Program = 
+        { 
+            InstructionPointer:int
+            Registers:Map<char, int64>
+            Mailbox:Queue<int64>
+            IsWaiting:bool
+            IsTerminated:bool
+            Count:int64
+            FirstRcv:int64 option
+        }
+
+    let myMapSet key value map =
+        let map = if map |> Map.containsKey key then map |> Map.remove key else map
+        map |> Map.add key value
+
+    let myMapFind key map =
+        if map |> Map.containsKey key then map |> Map.find key, map else 0L, map |> Map.add key 0L
+        
+    let parse (input:string) =
+        input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+        |> Seq.choose (fun line -> 
+            let op1 regX (textValue:string) logic = 
+                match Long.TryParse textValue with
+                | true, valueY -> Some (fun prog foreign ->
+                    let (valueX, registers) = prog.Registers |> myMapFind regX
+                    { prog with Registers = registers |> myMapSet regX ((valueX, valueY) ||> logic) }, foreign)
+                | false, _ -> 
+                    let regY = textValue.Chars 0
+                    Some (fun prog foreign ->
+                        let (valueX, registers) = prog.Registers |> myMapFind regX
+                        let (valueY, registers) = registers |> myMapFind regY
+                        { prog with Registers = registers |> myMapSet regX ((valueX, valueY) ||> logic) }, foreign)
+            match line with
+            | Regex "snd (.+)" (textReg::[]) ->
+                let reg = textReg.Chars 0
+                Some (fun prog foreign ->
+                    let (value, registers) = prog.Registers |> myMapFind reg
+                    { prog with Count = prog.Count + 1L; Registers = registers }, { foreign with Mailbox = foreign.Mailbox |> Queue.conj value; IsWaiting = false })
+            | Regex "set (.+) (.+)" (textReg::textValue::[]) ->
+                op1 (textReg.Chars 0) textValue (fun _ valueY -> valueY)
+            | Regex "add (.+) (.+)" (textReg::textValue::[]) ->
+                op1 (textReg.Chars 0) textValue (fun valueX valueY -> valueX + valueY)
+            | Regex "mul (.+) (.+)" (textReg::textValue::[]) ->
+                op1 (textReg.Chars 0) textValue (fun valueX valueY -> valueX * valueY)
+            | Regex "mod (.+) (.+)" (textReg::textValue::[]) ->
+                op1 (textReg.Chars 0) textValue (fun valueX valueY -> valueX % valueY)
+            | Regex "rcv (.+)" (textReg::[]) ->
+                let reg = textReg.Chars 0
+                Some (fun prog foreign ->
+                    let firstRcv =
+                        match prog.FirstRcv with
+                        | Some _ -> prog.FirstRcv
+                        | None -> prog.Mailbox |> Queue.toSeq |> Seq.tryLast
+                    if prog.Mailbox |> Queue.isEmpty then
+                        { prog with IsWaiting = true; InstructionPointer = prog.InstructionPointer - 1; FirstRcv = firstRcv }, foreign
+                    else
+                        let (value, mailbox) = prog.Mailbox |> Queue.uncons
+                        { prog with Registers = prog.Registers |> myMapSet reg value; Mailbox = mailbox; FirstRcv = firstRcv }, foreign)
+            | Regex "jgz (.+) (.+)" (textReg::textValue::[]) ->
+                match Long.TryParse textReg, Long.TryParse textValue with
+                | (true, value1), (true, value2) ->
+                    if value1 > 0L then
+                        Some (fun prog foreign ->
+                            { prog with InstructionPointer = prog.InstructionPointer + (value2 |> int) - 1 }, foreign)
+                    else None
+                | (true, value1), (false, _) ->
+                    if value1 > 0L then
+                        let reg = textValue.Chars 0
+                        Some (fun prog foreign ->
+                            let (value, registers) = prog.Registers |> myMapFind reg
+                            { prog with InstructionPointer = prog.InstructionPointer + (value |> int) - 1; Registers = registers }, foreign)
+                    else None
+                | (false, _), (true, value2) ->
+                    let reg = textReg.Chars 0
+                    Some (fun prog foreign ->
+                        let (value, registers) = prog.Registers |> myMapFind reg
+                        if value > 0L then
+                            { prog with InstructionPointer = prog.InstructionPointer + (value2 |> int) - 1; Registers = registers }, foreign
+                        else
+                            { prog with Registers = registers }, foreign)
+                | (false, _), (false, _) ->
+                    let regX = textReg.Chars 0
+                    let regY = textReg.Chars 0
+                    Some (fun prog foreign ->
+                        let (valueX, registers) = prog.Registers |> myMapFind regX
+                        let (valueY, registers) = registers |> myMapFind regY
+                        if valueX > 0L then
+                            { prog with InstructionPointer = prog.InstructionPointer + (valueY |> int) - 1; Registers = registers }, foreign
+                        else
+                            { prog with Registers = registers }, foreign)
+            | _ -> None)
+        |> Seq.toArray
+
+    let run (instructions: (Program -> Program -> Program * Program) array) =
+        let prog value =
+            { 
+                InstructionPointer = 0
+                Registers = seq { yield 'p', value } |> Map.ofSeq
+                Mailbox = Queue.empty
+                IsWaiting = false
+                IsTerminated = false
+                Count = 0L
+                FirstRcv = None
+            }
+        let progs = 0L |> prog, 1L |> prog
+
+        let (prog0, prog1) =
+            progs
+            |> Seq.unfold (fun (prog0, prog1) ->
+                if prog0.IsTerminated && prog1.IsTerminated then
+                    None
+                else
+                    let (prog0, prog1) =
+                        if prog0.IsTerminated |> not then
+                            instructions.[prog0.InstructionPointer] prog0 prog1
+                        else prog0, prog1
+                    let (prog0, prog1) =
+                        if prog1.IsTerminated |> not then   
+                            let (prog1, prog0) = instructions.[prog1.InstructionPointer] prog1 prog0
+                            prog0, prog1
+                        else prog0, prog1
+                    let (prog0, prog1) =
+                        if prog0.IsWaiting && prog1.IsWaiting then
+                            { prog0 with IsTerminated = true }, { prog1 with IsTerminated = true }
+                        else prog0, prog1
+                    let (prog0, prog1) =
+                        { prog0 with InstructionPointer = prog0.InstructionPointer + 1 }, { prog1 with InstructionPointer = prog1.InstructionPointer + 1 }
+                    let prog0 =
+                        if prog0.InstructionPointer < 0 || prog0.InstructionPointer >= (instructions |> Array.length) then
+                            { prog0 with IsTerminated = true }
+                        else prog0
+                    let prog1 =
+                        if prog1.InstructionPointer < 0 || prog1.InstructionPointer >= (instructions |> Array.length) then
+                            { prog1 with IsTerminated = true }
+                        else prog1
+                    Some ((prog0, prog1), (prog0, prog1)))
+            |> Seq.last
+        prog0.FirstRcv |> Option.defaultValue 0L, prog1.Count
+
+
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2017.18.txt"
-
-        let result1 = 0
-
-        let result2 = 0
+        
+        let (result1, result2) = input |> parse |> run
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
