@@ -933,14 +933,61 @@ module Day18 =
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day19 =
+    let parse (input:string) =
+        let lines =
+            input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+
+        Array2D.init lines.[0].Length lines.Length (fun x y -> lines.[y].Chars x)
+
+    let getStartingPoint map =
+        map 
+        |> Array2DgetRow 0 
+        |> Seq.mapi (fun i c -> i, c)
+        |> Seq.filter (fun (_, c) -> c = '|')
+        |> Seq.map fst
+        |> Seq.head
+
+    type Direction = | Down | Up | Left | Right
+
+    let run map =
+        let startingPoint = map |> getStartingPoint, 0
+        let startingDirection = Down
+        let startingSteps = 0
+        let startingText = ""
+
+        (startingPoint, startingDirection, startingSteps, startingText)
+        |> Seq.unfold (fun ((x, y), direction, steps, text) ->
+            if x < 0 || y < 0 || x >= (map |> Array2D.length1) || y >= (map |> Array2D.length2) || (map, x, y) |||> Array2D.get = ' ' then
+                None
+            else
+                let steps = steps + 1
+                let (x, y) =
+                    match direction with
+                    | Down -> x, y + 1
+                    | Up -> x, y - 1
+                    | Left -> x - 1, y
+                    | Right -> x + 1, y
+                let currentChar = (map, x, y) |||> Array2D.get
+                let text = if currentChar >= 'A' && currentChar <= 'Z' then sprintf "%s%c" text currentChar else text
+                let direction =
+                    if currentChar = '+' then
+                        if direction = Down || direction = Up then
+                            if x <> 0 && (map, x - 1, y) |||> Array2D.get = '-' then Left
+                            else Right
+                        else
+                            if y <> 0 && (map, x, y - 1) |||> Array2D.get = '|' then Up
+                            else Down
+                    else direction
+                Some ((text, steps), ((x, y), direction, steps, text)))
+        |> Seq.last
+
+        
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2017.19.txt"
 
-        let result1 = 0
+        let (result1, result2) = input |> parse |> run
 
-        let result2 = 0
-
-        { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
+        { First = result1; Second = sprintf "%d" result2 }
 
 module Day20 =
     let go() =
