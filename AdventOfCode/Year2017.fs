@@ -990,12 +990,59 @@ module Day19 =
         { First = result1; Second = sprintf "%d" result2 }
 
 module Day20 =
+    open System
+    type Coordinates = { X:int; Y:int; Z:int }
+    type Particle = { Position:Coordinates; Velocity:Coordinates; Acceleration:Coordinates }
+
+    let parse (input:string) =
+        input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+        |> Seq.choose (fun line ->
+            match line with
+            | Regex "p=<(.+),(.+),(.+)>, v=<(.+),(.+),(.+)>, a=<(.+),(.+),(.+)>" (pX::pY::pZ::vX::vY::vZ::aX::aY::aZ::[]) ->
+                Some {
+                        Position= { X=Integer.Parse pX; Y=Integer.Parse pY; Z=Integer.Parse pZ }
+                        Velocity= { X=Integer.Parse vX; Y=Integer.Parse vY; Z=Integer.Parse vZ }
+                        Acceleration= { X=Integer.Parse aX; Y=Integer.Parse aY; Z=Integer.Parse aZ }
+                     }
+            | _ -> None)
+        |> Seq.toArray
+
+    let getNearestFromZero particles =
+        particles
+        |> Seq.mapi (fun i particle ->
+            i, Math.Abs(particle.Acceleration.X) + Math.Abs(particle.Acceleration.Y) + Math.Abs(particle.Acceleration.Z))
+        |> Seq.minBy snd
+        |> fst
+
+    let getCollisions particles =
+        (particles, seq { 0 .. 999 })
+        ||> Seq.fold (fun particles _ ->
+            let newParticles = 
+                particles 
+                |> Seq.map (fun particle ->
+                    { particle with Velocity = { particle.Velocity with X = particle.Velocity.X + particle.Acceleration.X; 
+                                                                        Y = particle.Velocity.Y + particle.Acceleration.Y; 
+                                                                        Z = particle.Velocity.Z + particle.Acceleration.Z }})
+                |> Seq.map (fun particle ->
+                    { particle with Position = { particle.Position with X = particle.Position.X + particle.Velocity.X; 
+                                                                        Y = particle.Position.Y + particle.Velocity.Y; 
+                                                                        Z = particle.Position.Z + particle.Velocity.Z }})
+                |> Seq.toArray
+            newParticles
+            |> Seq.groupBy (fun particle -> particle.Position)
+            |> Seq.filter (fun (_, elements) -> elements |> Seq.skip 1 |> Seq.isEmpty)
+            |> Seq.collect (fun (_, elements) -> elements)
+            |> Seq.toArray)
+        |> Array.length
+
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2017.20.txt"
 
-        let result1 = 0
+        let particles = input |> parse
 
-        let result2 = 0
+        let result1 = particles |> getNearestFromZero
+
+        let result2 = particles |> getCollisions
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
