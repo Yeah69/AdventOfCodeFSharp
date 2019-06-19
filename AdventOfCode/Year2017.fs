@@ -1047,12 +1047,168 @@ module Day20 =
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day21 =
+    open System
+
+    let signsToNumber text = text |> Seq.rev |> Seq.mapi (fun i c -> if c = '#' then Math.Pow(2., i |> double) |> int else 0) |> Seq.sum
+
+    let parse (input:string) =
+        let twoMap =
+            input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+            |> Seq.choose (fun line -> 
+                match line with
+                | Regex "([\.#][\.#])/([\.#][\.#]) => ([\.#][\.#][\.#])/([\.#][\.#][\.#])/([\.#][\.#][\.#])" (in0::in1::out0::out1::out2::[]) ->
+                    let input = seq { yield in0; yield in1 } |> String.concat ""
+                    let output = seq { yield out0; yield out1; yield out2 } |> String.concat ""
+                    Some (input, output)
+                | _ -> None)
+            |> Seq.map (fun (input, output) ->
+                input, output |> signsToNumber)
+            |> Seq.collect (fun (input, output) ->
+                let rotate (text:string) =
+                    sprintf "%c%c%c%c" (text.Chars 2) (text.Chars 0) (text.Chars 3) (text.Chars 1)
+                let flip (text:string) = 
+                    sprintf "%c%c%c%c" (text.Chars 1) (text.Chars 0) (text.Chars 3) (text.Chars 2)
+            
+                seq { yield input }
+                |> Seq.append(
+                    (input, seq { 0 .. 6 })
+                    ||> Seq.scan (fun text i -> if i = 3 then input |> flip else text |> rotate))
+                |> Seq.distinct
+                |> Seq.map signsToNumber
+                |> Seq.map (fun input -> input, output))
+            |> Map.ofSeq
+
+        let threeMap =
+            input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+            |> Seq.choose (fun line -> 
+                match line with
+                | Regex "([\.#][\.#][\.#])/([\.#][\.#][\.#])/([\.#][\.#][\.#]) => ([\.#][\.#][\.#][\.#])/([\.#][\.#][\.#][\.#])/([\.#][\.#][\.#][\.#])/([\.#][\.#][\.#][\.#])" (in0::in1::in2::out0::out1::out2::out3::[]) ->
+                    let input = seq { yield in0; yield in1; yield in2 } |> String.concat ""
+                    let output = seq { yield out0; yield out1; yield out2; yield out3 } |> String.concat ""
+                    Some (input, output)
+                | _ -> None)
+            |> Seq.map (fun (input, output) ->
+                input, output |> signsToNumber)
+            |> Seq.collect (fun (input, output) ->
+                let rotate (text:string) =
+                    sprintf "%c%c%c%c%c%c%c%c%c" (text.Chars 6) (text.Chars 3) (text.Chars 0) (text.Chars 7) (text.Chars 4) (text.Chars 1) (text.Chars 8) (text.Chars 5) (text.Chars 2)
+                let flipVertically (text:string) = 
+                    sprintf "%c%c%c%c%c%c%c%c%c" (text.Chars 2) (text.Chars 1) (text.Chars 0) (text.Chars 5) (text.Chars 4) (text.Chars 3) (text.Chars 8) (text.Chars 7) (text.Chars 6)
+                let flipHoricontally (text:string) = 
+                    sprintf "%c%c%c%c%c%c%c%c%c" (text.Chars 6) (text.Chars 7) (text.Chars 8) (text.Chars 3) (text.Chars 4) (text.Chars 5) (text.Chars 0) (text.Chars 1) (text.Chars 2)
+                
+                seq { yield input }
+                |> Seq.append(
+                    (input, seq { 0 .. 10 })
+                    ||> Seq.scan (fun text i -> 
+                        if i = 3 then input |> flipVertically
+                        elif i = 7 then input |> flipHoricontally
+                        else text |> rotate))
+                |> Seq.distinct
+                |> Seq.map signsToNumber
+                |> Seq.map (fun input -> input, output))
+            |> Map.ofSeq
+
+        twoMap, threeMap
+
+    let iterate currentArray dimension startIteration endIteration twoMap threeMap =
+        ((currentArray, dimension), seq { startIteration .. endIteration })
+        ||> Seq.fold (fun (prevArray, prevDimension) i ->
+            let fourTransform arr = 
+                let length = (arr |> Array2D.length1) * 2
+                Array2D.init length length (fun y x -> 
+                    let prevValue = Array2D.get arr (y / 2) (x / 2)
+                    match y % 2, x % 2 with
+                    | 0, 0 -> ((0b1100_0000_0000_0000 &&& prevValue) >>> 12) ||| ((0b0000_1100_0000_0000 &&& prevValue) >>> 10)
+                    | 0, 1 -> ((0b0011_0000_0000_0000 &&& prevValue) >>> 10) ||| ((0b0000_0011_0000_0000 &&& prevValue) >>>  8)
+                    | 1, 0 -> ((0b0000_0000_1100_0000 &&& prevValue) >>>  4) ||| ((0b0000_0000_0000_1100 &&& prevValue) >>>  2)
+                    | 1, 1 -> ((0b0000_0000_0011_0000 &&& prevValue) >>>  2) ||| ((0b0000_0000_0000_0011 &&& prevValue) >>>  0)
+                    | _ -> 0)
+
+            let threeTransform arr = 
+                let length = (arr |> Array2D.length1) + (arr |> Array2D.length1) / 2 
+                Array2D.init length length (fun y x -> 
+                    let (y', x') = ((y |> double) * 2. / 3.) |> int, ((x |> double) * 2. / 3.) |> int
+                    match y % 3, x % 3 with
+                    | 0, 0 ->
+                        let prevValue = Array2D.get arr y' x'
+                        ((0b110_000_000 &&& prevValue) >>> 5) ||| ((0b000_110_000 &&& prevValue) >>> 4)
+                    | 0, 1 -> 
+                        let (prevValue_0, prevValue_1) = Array2D.get arr y' x', Array2D.get arr y' (x' + 1)
+                        ((0b001_000_000 &&& prevValue_0) >>> 3) ||| ((0b100_000_000 &&& prevValue_1) >>> 6) ||| ((0b000_001_000 &&& prevValue_0) >>> 2) ||| ((0b000_100_000 &&& prevValue_1) >>> 5)
+                    | 0, 2 -> 
+                        let prevValue = Array2D.get arr y' x'
+                        ((0b011_000_000 &&& prevValue) >>> 4) ||| ((0b000_011_000 &&& prevValue) >>> 3)
+                    | 1, 0 -> 
+                        let (prevValue_0, prevValue_1) = Array2D.get arr y' x', Array2D.get arr (y' + 1) x'
+                        ((0b000_000_110 &&& prevValue_0) <<< 1) ||| ((0b110_000_000 &&& prevValue_1) >>> 7)
+                    | 1, 1 -> 
+                        let (prevValue_0, prevValue_1, prevValue_2, prevValue_3) =Array2D.get arr y' x', Array2D.get arr y' (x' + 1), Array2D.get arr (y' + 1) x', Array2D.get arr (y' + 1) (x' + 1)
+                        ((0b000_000_001 &&& prevValue_0) <<< 3) ||| ((0b000_000_100 &&& prevValue_1) >>> 0) ||| ((0b001_000_000 &&& prevValue_2) >>> 5) ||| ((0b100_000_000 &&& prevValue_3) >>> 8)
+                    | 1, 2 -> 
+                        let (prevValue_0, prevValue_1) = Array2D.get arr y' x', Array2D.get arr (y' + 1) x'
+                        ((0b000_000_011 &&& prevValue_0) <<< 2) ||| ((0b011_000_000 &&& prevValue_1) >>> 6)
+                    | 2, 0 -> 
+                        let prevValue = Array2D.get arr y' x'
+                        ((0b000_110_000 &&& prevValue) >>> 2) ||| ((0b000_000_110 &&& prevValue) >>> 1)
+                    | 2, 1 -> 
+                        let (prevValue_0, prevValue_1) = Array2D.get arr y' x', Array2D.get arr y' (x' + 1)
+                        ((0b000_001_000 &&& prevValue_0) >>> 0) ||| ((0b000_100_000 &&& prevValue_1) >>> 3) ||| ((0b000_000_001 &&& prevValue_0) <<< 1) ||| ((0b000_000_100 &&& prevValue_1) >>> 2)
+                    | 2, 2 -> 
+                        let prevValue = Array2D.get arr y' x'
+                        ((0b000_011_000 &&& prevValue) >>> 1) ||| ((0b000_000_011 &&& prevValue) >>> 0)
+                    | _ -> 0) 
+            
+            let map = if prevDimension = 2 then twoMap else threeMap
+            let currArray =
+                prevArray 
+                |> Array2D.map (fun number -> map |> Map.find number)
+            let currDimension = prevDimension + 1
+            
+            if currDimension = 4 then
+                (currArray |> fourTransform), 2
+            elif (3 * (currArray |> Array2D.length1)) % 2 = 1 then
+                currArray, 3
+            else
+                (currArray |> threeTransform), 2)
+
+    let countLights array =
+        array
+        |> Array2Dflatten
+        |> Seq.collect (fun number ->
+            seq {
+                    yield number &&& 0b1000_0000_0000_0000 > 0
+                    yield number &&& 0b0100_0000_0000_0000 > 0
+                    yield number &&& 0b0010_0000_0000_0000 > 0
+                    yield number &&& 0b0001_0000_0000_0000 > 0
+                    yield number &&& 0b0000_1000_0000_0000 > 0
+                    yield number &&& 0b0000_0100_0000_0000 > 0
+                    yield number &&& 0b0000_0010_0000_0000 > 0
+                    yield number &&& 0b0000_0001_0000_0000 > 0
+                    yield number &&& 0b0000_0000_1000_0000 > 0
+                    yield number &&& 0b0000_0000_0100_0000 > 0
+                    yield number &&& 0b0000_0000_0010_0000 > 0
+                    yield number &&& 0b0000_0000_0001_0000 > 0
+                    yield number &&& 0b0000_0000_0000_1000 > 0
+                    yield number &&& 0b0000_0000_0000_0100 > 0
+                    yield number &&& 0b0000_0000_0000_0010 > 0
+                    yield number &&& 0b0000_0000_0000_0001 > 0
+                })
+        |> Seq.filter identity
+        |> Seq.length
+
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2017.21.txt"
 
-        let result1 = 0
+        let maps = input |> parse
 
-        let result2 = 0
+        let first = maps ||> iterate (Array2D.create 1 1 143) 3 1 5
+
+        let result1 = first |> fst |> countLights
+
+        let second = maps ||> iterate (first |> fst) (first |> snd) 6 18
+
+        let result2 = second |> fst |> countLights
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
