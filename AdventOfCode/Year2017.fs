@@ -1113,7 +1113,7 @@ module Day21 =
 
     let iterate currentArray dimension startIteration endIteration twoMap threeMap =
         ((currentArray, dimension), seq { startIteration .. endIteration })
-        ||> Seq.fold (fun (prevArray, prevDimension) i ->
+        ||> Seq.fold (fun (prevArray, prevDimension) _ ->
             let fourTransform arr = 
                 let length = (arr |> Array2D.length1) * 2
                 Array2D.init length length (fun y x -> 
@@ -1213,12 +1213,90 @@ module Day21 =
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day22 =
+    open System.Collections.Generic
+    type State = | Clean | Infected | Weakened | Flagged
+    let parse (input:string) =
+        let textRows = input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+        let countRows = textRows.Length
+        let countColumns = textRows |> Seq.map String.length |> Seq.max
+        let rowOffset = countRows / 2
+        let columnOffset = countColumns / 2
+
+        let dict = new Dictionary<(int * int), State>()
+
+        textRows
+        |> Seq.mapi (fun y row -> columnOffset - y, row)
+        |> Seq.collect (fun (y, row) -> 
+            row 
+            |> Seq.mapi (fun x c -> x - rowOffset, c)
+            |> Seq.where (fun (_, c) -> c = '#') 
+            |> Seq.map (fun (x, _) -> y, x))
+        |> Seq.map (fun pos -> pos, Infected)
+        |> Seq.iter (fun (pos, state) -> dict.[pos] <- state)
+
+        dict
+
+    let wormRun getDirection getState (map:IDictionary<(int*int),State>) iterationCount =
+        let getPos (y, x) dir =
+            match dir with
+            | Up -> (y + 1, x)
+            | Down -> (y - 1, x)
+            | Left -> (y, x - 1)
+            | Right -> (y, x + 1)
+
+        (((0, 0), Up, Clean), seq { 1 .. iterationCount })
+        ||> Seq.scan (fun (pos, direction, _) _ ->
+            let state =
+                match map.TryGetValue pos with
+                | true, state -> state
+                | false, _ -> Clean
+            let direction = (direction, state) ||> getDirection
+            let state = state |> getState
+            if state = Clean then map.Remove pos |> ignore else map.[pos] <- state
+            let pos = (pos, direction) ||> getPos
+            pos, direction, state)
+        |> Seq.filter (fun (_, _, state) -> state = Infected)
+        |> Seq.length
+
+    let getDirectionFirst direction state =
+        match direction, state with
+        | Up,    Infected | Down,  Clean -> Right
+        | Down,  Infected | Up,    Clean -> Left
+        | Left,  Infected | Right, Clean -> Up
+        | Right, Infected | Left,  Clean -> Down
+        | _                              -> direction
+        
+    let getStateFirst state =
+        match state with
+        | Clean    -> Infected
+        | Infected -> Clean
+        | _        -> state
+
+    let wormRunFirst = wormRun getDirectionFirst getStateFirst
+    
+    let getDirectionSecond direction state =
+        match direction, state with
+        | Up,    Infected | Down,  Clean | Left,  Flagged -> Right
+        | Down,  Infected | Up,    Clean | Right, Flagged -> Left
+        | Left,  Infected | Right, Clean | Down,  Flagged -> Up
+        | Right, Infected | Left,  Clean | Up,    Flagged -> Down
+        | _,     Weakened                                 -> direction
+            
+    let getStateSecond state =
+        match state with
+        | Clean    -> Weakened
+        | Weakened -> Infected
+        | Infected -> Flagged
+        | Flagged  -> Clean
+    
+    let wormRunSecond = wormRun getDirectionSecond getStateSecond
+
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2017.22.txt"
+        
+        let result1 = (input |> parse, 10_000) ||> wormRunFirst
 
-        let result1 = 0
-
-        let result2 = 0
+        let result2 = (input |> parse, 10_000_000) ||> wormRunSecond
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 

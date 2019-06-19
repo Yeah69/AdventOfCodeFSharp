@@ -20,3 +20,5 @@ module Days =
         match Int32.TryParse(s) with
         | (true, day) when day >= 1 && day <= 25 -> Some(Day day)
         | _ -> None
+
+type Direction2D = | Up | Down | Left | Right
