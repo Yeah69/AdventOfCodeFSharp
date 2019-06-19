@@ -1301,12 +1301,96 @@ module Day22 =
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day23 =
+    open System.Collections.Generic
+    let parse (input:string) =
+        let instructions =
+            input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+            |> Seq.choose (fun line -> 
+                let op1 regX (textValue:string) logic countOperation = 
+                    match Long.TryParse textValue with
+                    | true, valueY -> Some (fun (map:IDictionary<char,int64>) insPointer ->
+                        let valueX = map.[regX]
+                        map.[regX] <- (valueX, valueY) ||> logic
+                        insPointer + 1, countOperation)
+                    | false, _ -> 
+                        let regY = textValue.Chars 0
+                        Some (fun map insPointer ->
+                            let valueX = map.[regX]
+                            let valueY = map.[regY]
+                            map.[regX] <- (valueX, valueY) ||> logic
+                            insPointer + 1, countOperation)
+                match line with
+                | Regex "set (.+) (.+)" (textReg::textValue::[]) ->
+                    op1 (textReg.Chars 0) textValue (fun _ valueY -> valueY) false
+                | Regex "mul (.+) (.+)" (textReg::textValue::[]) ->
+                    op1 (textReg.Chars 0) textValue (fun valueX valueY -> valueX * valueY) true
+                | Regex "add (.+) (.+)" (textReg::textValue::[]) ->
+                    op1 (textReg.Chars 0) textValue (fun valueX valueY -> valueX + valueY) false
+                | Regex "sub (.+) (.+)" (textReg::textValue::[]) ->
+                    op1 (textReg.Chars 0) textValue (fun valueX valueY -> valueX - valueY) false
+                | Regex "mod (.+) (.+)" (textReg::textValue::[]) ->
+                    op1 (textReg.Chars 0) textValue (fun valueX valueY -> valueX % valueY) false
+                | Regex "jnz (.+) (.+)" (textReg::textValue::[]) ->
+                    match Long.TryParse textReg, Long.TryParse textValue with
+                    | (true, value1), (true, value2) ->
+                        if value1 <> 0L then
+                            Some (fun _ insPointer -> insPointer + (value2 |> int), false)
+                        else Some (fun _ insPointer -> insPointer + 1, false)
+                    | (true, value1), (false, _) ->
+                        if value1 <> 0L then
+                            let reg = textValue.Chars 0
+                            Some (fun (map:IDictionary<char,int64>) insPointer ->
+                                let value = map.[reg]
+                                insPointer + (value |> int), false)
+                        else Some (fun _ insPointer -> insPointer + 1, false)
+                    | (false, _), (true, value2) ->
+                        let reg = textReg.Chars 0
+                        Some (fun (map:IDictionary<char,int64>) insPointer ->
+                            let value = map.[reg]
+                            if value <> 0L then
+                                insPointer + (value2 |> int), false
+                            else
+                                insPointer + 1, false)
+                    | (false, _), (false, _) ->
+                        let regX = textReg.Chars 0
+                        let regY = textReg.Chars 0
+                        Some (fun map insPointer ->
+                            let valueX = map.[regX]
+                            let valueY = map.[regY]
+                            if valueX > 0L then
+                                insPointer + (valueY |> int), false
+                            else
+                                insPointer + 1, false)
+                | _ -> None)
+            |> Seq.toArray
+
+        let map = new Dictionary<char, int64>()
+        seq { 'a' .. 'h' } |> Seq.map (asSecond 0L) |> Seq.iter (fun (c, i) -> map.[c] <- i)
+
+        map, instructions
+
+    let run (map:IDictionary<char,int64>) (instructions:(IDictionary<char,int64> -> int -> int * bool) array) =
+        (map, 0, 0) 
+        |> Seq.unfold (fun (map, insPointer, count) ->
+            if insPointer < 0 || insPointer >= instructions.Length then None
+            else
+                let insPointer, increase = instructions.[insPointer] map insPointer
+                let count = if increase then count + 1 else count
+                Some ((map, count), (map, insPointer, count)))
+        |> Seq.last
+
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2017.23.txt"
 
-        let result1 = 0
+        let result1 = input |> parse ||> run |> snd
 
-        let result2 = 0
+        let optimized = inputFromResource "AdventOfCode.Inputs._2017.23_optimized.txt"
+
+        let (map, instructions) = optimized |> parse
+
+        map.['a'] <- 1L
+
+        let result2 = ((map, instructions) ||> run |> fst).['h']
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 

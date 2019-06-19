@@ -1,0 +1,15 @@
+﻿set b 105700
+set d 2
+set g b
+mod g d
+jnz g 3
+add h 1
+jnz 1 5
+add d 1
+set g d
+sub g b
+jnz g -8
+add b 17
+set g b
+sub g 122717
+jnz g -13

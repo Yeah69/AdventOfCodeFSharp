@@ -131,6 +131,7 @@
     <EmbeddedResource Include="Inputs\2017\21_0.txt" />
     <EmbeddedResource Include="Inputs\2017\22.txt" />
     <EmbeddedResource Include="Inputs\2017\23.txt" />
+    <EmbeddedResource Include="Inputs\2017\23_optimized.txt" />
     <EmbeddedResource Include="Inputs\2017\24.txt" />
     <EmbeddedResource Include="Inputs\2017\25.txt" />
     <EmbeddedResource Include="Inputs\2018\01.txt" />
