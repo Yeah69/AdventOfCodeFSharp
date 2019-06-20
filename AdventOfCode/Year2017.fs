@@ -1447,8 +1447,6 @@ module Day24 =
             inner currentPins choosenPorts remainingPorts)
         |> selectBestResult
 
-        
-
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2017.24.txt"
 
@@ -1461,10 +1459,49 @@ module Day24 =
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day25 =
+    type Direction = | Left | Right
+    let parse (input:string) =
+        let initialState =
+            match input with
+            | Regex "Begin in state (.)\." (textState::[]) -> textState.Chars 0
+            | _ -> 'A'
+
+        let stepsUntilDiagnostics =
+            match input with
+            | Regex "Perform a diagnostic checksum after (\d+) steps\." (textSteps::[]) -> Integer.Parse textSteps
+            | _ -> 0
+
+        let instructions =
+            input.Split([| "In state " |], System.StringSplitOptions.None)
+            |> Seq.choose (fun segment -> 
+                match segment with
+                | Regex "(.):(?:\\r\\n|\\r|\\n)  If the current value is 0:(?:\\r\\n|\\r|\\n)    \- Write the value (\d)\.(?:\\r\\n|\\r|\\n)    \- Move one slot to the (left|right)\.(?:\\r\\n|\\r|\\n)    \- Continue with state (.)\.(?:\\r\\n|\\r|\\n)  If the current value is 1:(?:\\r\\n|\\r|\\n)    \- Write the value (\d)\.(?:\\r\\n|\\r|\\n)    \- Move one slot to the (left|right)\.(?:\\r\\n|\\r|\\n)    \- Continue with state (.)\." (state::zeroValue::zeroDir::zeroState::oneValue::oneDir::oneState::[]) -> 
+                    let zero = Integer.Parse zeroValue, (if zeroDir = "left" then Left else Right), zeroState.Chars 0
+                    let one = Integer.Parse oneValue, (if oneDir = "left" then Left else Right), oneState.Chars 0
+                    Some (state.Chars 0, (fun currValue -> if currValue = 0 then zero else one))
+                | _ -> None)
+            |> Map.ofSeq
+
+        initialState, stepsUntilDiagnostics, instructions
+
+    let runProgram initialState stepsUntilDiagnostics instructions =
+        let (_, _, set) =
+            ((initialState, 0, Set.empty), seq { 1 .. stepsUntilDiagnostics })
+            ||> Seq.fold (fun (state, pos, set) _ ->
+                let currValue = if set |> Set.contains pos then 1 else 0
+                let (nextValue, dir, state) = (instructions |> Map.find state) currValue
+                let set = 
+                    if currValue = 1 && nextValue = 0 then set |> Set.remove pos 
+                    elif currValue = 0 && nextValue = 1 then set |> Set.add pos
+                    else set
+                let pos = if dir = Left then pos - 1 else pos + 1
+                state, pos, set)
+        set |> Seq.length
+        
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2017.25.txt"
 
-        let result1 = 0
+        let result1 = input |> parse |||> runProgram
 
         let result2 = 0
 
