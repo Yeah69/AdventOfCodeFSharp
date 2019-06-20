@@ -1395,12 +1395,68 @@ module Day23 =
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day24 =
+    type Port = { Number:int; First:int; Second:int }
+    let parse (input:string) =
+        input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+        |> Seq.mapi (fun i line -> i, line)
+        |> Seq.choose (fun (i, line) ->
+            match line with
+            | Regex "(\d+)/(\d+)" (textFirst::textSecond::[]) -> Some { Number = i; First = Integer.Parse textFirst; Second = Integer.Parse textSecond }
+            | _ -> None)
+        |> Set.ofSeq
+        
+    let portCompatibleWith pins port =
+        port.First = pins || port.Second = pins
+                
+    let portInitials port =
+        port.First = 0 || port.Second = 0
+
+    let portStrength port =
+        port.First + port.Second
+
+    let buildBridges ports =
+        let selectBestResult results =
+            let strongest = results |> Seq.map fst |> Seq.max
+            let longestLength = results |> Seq.map snd |> Seq.map fst |> Seq.max
+            let longestStrongest = results |> Seq.map snd |> Seq.where (fun (size, _) -> size = longestLength) |> Seq.maxBy snd
+            strongest, longestStrongest
+            
+
+        let rec inner currentPins choosenPorts remainingPorts =
+            let nextPossiblePorts = remainingPorts |> Seq.filter (portCompatibleWith currentPins) |> Seq.toList
+            if nextPossiblePorts |> List.isEmpty then
+                let bridgeSize = choosenPorts |> Seq.length
+                let bridgeStrength = choosenPorts |> Seq.map (portStrength) |> Seq.sum
+                (bridgeStrength, (bridgeSize, bridgeStrength))
+            else
+                nextPossiblePorts 
+                |> Seq.map (fun port ->
+                    let currentPins = if port.First = currentPins then port.Second else port.First
+                    let choosenPorts = choosenPorts |> Set.add port
+                    let remainingPorts = remainingPorts |> Set.remove port
+                    inner currentPins choosenPorts remainingPorts)
+                |> Seq.toList
+                |> selectBestResult
+        
+        ports 
+        |> Seq.filter (portInitials) 
+        |> Seq.map (fun port ->
+            let currentPins = if port.First = 0 then port.Second else port.First
+            let choosenPorts = seq { yield port } |> Set.ofSeq
+            let remainingPorts = ports |> Set.remove port
+            inner currentPins choosenPorts remainingPorts)
+        |> selectBestResult
+
+        
+
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2017.24.txt"
 
-        let result1 = 0
+        let result = input |> parse |> buildBridges
 
-        let result2 = 0
+        let result1 = result |> fst
+
+        let result2 = result |> snd |> snd
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
