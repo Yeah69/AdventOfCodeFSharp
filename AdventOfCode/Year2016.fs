@@ -615,12 +615,12 @@ module Day11 =
             |> Seq.map (fun element -> first, element)
             |> Seq.append (getAllPairs (seq |> Seq.skip 1))
 
-    let fourBaseArray = seq { 0. .. 10. } |> Seq.map (fun i -> Math.Pow(4., i) |> int) |> Array.ofSeq
+    let fourBaseArray = seq { 0. .. 14. } |> Seq.map (fun i -> Math.Pow(4., i) |> int64) |> Array.ofSeq
 
     let rec findSolution components =
         let queue = Queue<int*Floor*Component array>()
         queue.Enqueue((0, F1, components))
-        let hashedStateToSteps = Dictionary<int,int>()
+        let hashedStateToSteps = Dictionary<int64,int>()
 
         Integer.MaxValue
         |> Seq.unfold (fun bestSofar ->
@@ -633,7 +633,7 @@ module Day11 =
                     seq { yield (elevator |> floorRank) } 
                     |> Seq.append (components |> Seq.map (getFloor >> floorRank)) 
                     |> Seq.zip fourBaseArray 
-                    |> Seq.map (fun (floorRank, fourBase) -> floorRank * fourBase)
+                    |> Seq.map (fun (fourBase, floorRank) -> (floorRank |> int64) * fourBase)
                     |> Seq.sum
                 let ``continue`` =
                     match hashedStateToSteps.TryGetValue hash with
@@ -655,9 +655,7 @@ module Day11 =
                 // if final state return steps so far, because it is the best result so far
                 | _ when anyComponentsNotOnF4 |> not -> 
                     let bestSofar = 
-                        if bestSofar > stepsSofar then
-                            printfn "%d" stepsSofar
-                            stepsSofar 
+                        if bestSofar > stepsSofar then stepsSofar 
                         else bestSofar
                     Some (bestSofar, bestSofar)
                 // if steps so far are equal or greater to the best result then abort
@@ -696,9 +694,7 @@ module Day11 =
                         |> Seq.append (componentsOnSameFloor |> getAllPairs |> Seq.allPairs neighboringFloors |> Seq.map (fun (floor, (comp0, comp1)) -> floor, [ comp0; comp1 ]))
                         // validate collected move candidates
                         |> Seq.filter validation
-                        // sort randomly
-                        //|> scramble random
-                        //|> Seq.sortByDescending (fst >> floorRank)
+
                     if nextMoves |> Seq.isEmpty then Some (bestSofar, bestSofar)
                     else
                         let stepsSofar = stepsSofar + 1
@@ -716,7 +712,9 @@ module Day11 =
 
         let result1 =  components |> findSolution
 
-        let result2 = 0
+        let withNewComponents = components |> Array.append [| Microchip ("elerium", F1); Generator ("elerium", F1); Microchip ("dilithium", F1); Generator ("dilithium", F1) |]
+
+        let result2 = withNewComponents |> findSolution
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
