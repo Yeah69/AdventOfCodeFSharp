@@ -704,17 +704,36 @@ module Day11 =
                             queue.Enqueue((stepsSofar, targetFloor, components)))
                         Some (bestSofar,bestSofar))
         |> Seq.last
+
+    let getResults components =
+        // strip all matching pairs on F1
+        let pairedElementsOnF1 = components |> Seq.filter (fun comp -> (comp |> getFloor) = F1) |> Seq.groupBy getLabel |> Seq.filter (fun (_, group) -> group |> Seq.length = 2) |> Seq.collect snd
+        let initialComponents =  components |> Array.except pairedElementsOnF1
+                           
+        
+        let (firstLength, firstSteps, stableDiff) =
+            seq { yield (initialComponents, (initialComponents |> findSolution)) }
+            |> Seq.append ((initialComponents, seq { 'a' .. 'z'}) 
+                            ||> Seq.scan (fun components c -> components |> Array.append ([| Microchip (c.ToString(), F1); Generator (c.ToString(), F1) |])) 
+                            |> Seq.map (fun components -> components, (components |> findSolution)))
+
+            // track difference of outcome if successively adding matching pairs to F1
+            |> Seq.pairwise
+            |> Seq.map (fun ((comps1, count1), (_, count2)) -> comps1.Length, count1, count2 - count1)
+            // get the data of the first occurence which lead to a stable difference
+            |> Seq.pairwise
+            |> Seq.filter (fun ((_, _, diff1), (_, _, diff2)) -> diff1 = diff2)
+            |> Seq.map (fun ((length, steps, diff), _) -> length, steps, diff)
+            |> Seq.head
+
+        firstSteps + (10 - firstLength) / 2 * stableDiff, firstSteps + (14 - firstLength) / 2 * stableDiff
         
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2016.11.txt"
 
         let components = input |> parse
-
-        let result1 =  components |> findSolution
-
-        let withNewComponents = components |> Array.append [| Microchip ("elerium", F1); Generator ("elerium", F1); Microchip ("dilithium", F1); Generator ("dilithium", F1) |]
-
-        let result2 = withNewComponents |> findSolution
+            
+        let (result1, result2) = components |> getResults
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
