@@ -406,30 +406,315 @@ module Day8 =
         { First = sprintf "%d" result1; Second = result2 }
 
 module Day9 =
+    open System
+    let getDecompressedLength (text:string) furtherDecompression =
+        let rec inner (currentSpan: ReadOnlyMemory<char>) currentSize =
+            let index = currentSpan.Span.IndexOf '('
+            if index = -1 then currentSize + (currentSpan.Length |> int64)
+            else 
+                let currentSize = currentSize + (index |> int64)
+                let currentSpan = currentSpan.Slice index
+                let xIndex = currentSpan.Span.IndexOf 'x'
+                let closeIndex = currentSpan.Span.IndexOf ')'
+                if xIndex > -1 && closeIndex > -1 && xIndex < closeIndex then 
+                    let getNumber (span: ReadOnlyMemory<char>) i1 i2 =
+                        let check =
+                            seq { i1 .. i2} 
+                            |> Seq.map (fun i -> 
+                                let c = span.Span.Item i
+                                c |> Char.IsDigit |> not)
+                            |> Seq.exists identity
+                            |> not
+                        if check then Some (Long.Parse (span.Slice(i1, i2 - i1 + 1).ToString()))
+                        else None
+                    match getNumber currentSpan 1 (xIndex - 1), getNumber currentSpan (xIndex + 1) (closeIndex - 1) with
+                    | Some length, Some times ->
+                        let currentSize = 
+                            if furtherDecompression then currentSize + (inner (currentSpan.Slice(closeIndex + 1, length |> int)) 0L) * times
+                            else currentSize + length * times
+                        let currentSpan = currentSpan.Slice (closeIndex + (length |> int) + 1)
+                        inner currentSpan currentSize
+                    | _ -> inner (currentSpan.Slice 1) currentSize + 1L
+                else inner (currentSpan.Slice 1) currentSize + 1L
+                
+        
+        let span = text.AsMemory()
+        inner span 0L
+    
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2016.09.txt"
 
-        let result1 = 0
+        let result1 = (input, false) ||> getDecompressedLength
 
-        let result2 = 0
+        let result2 = (input, true) ||> getDecompressedLength
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day10 =
+    type Bot = { First:int option; Second:int option; Instruction:Bot->Map<int,Bot>->Map<int,int>->Map<int,Bot>*Map<int,int>*int option }
+
+    let parse (input:string) =
+        let lines = input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+
+        let bots =
+            lines
+            |> Seq.choose (fun line -> 
+                match line with
+                | Regex "bot (\d+) gives low to (bot|output) (\d+) and high to (bot|output) (\d+)" (indexText::lowKind::lowIndexText::highKind::highIndexText::[]) ->
+                    let (index, lowIndex, highIndex) = Integer.Parse indexText, Integer.Parse lowIndexText, Integer.Parse highIndexText
+                    let instruction =
+                        (fun bot bots output -> 
+                            let checkValidAction() =
+                                let valuesCheck = bot.First |> Option.isSome && bot.Second |> Option.isSome
+                                let botCheck kind index = 
+                                    kind = "output" || 
+                                            (let otherBot = bots |> Map.tryFind index;
+                                             match otherBot with
+                                             | Some oBot -> oBot.First |> Option.isNone || oBot.Second |> Option.isNone
+                                             | _ -> false)
+                                valuesCheck && (botCheck lowKind lowIndex) && (botCheck highKind highIndex)
+                            
+                            if checkValidAction() then
+                                // path where bot has two values
+                                let setOtherBot index value =
+                                    let otherBot = bots |> Map.find index
+                                    let otherBot =
+                                        match otherBot.First with 
+                                        | Some _ -> { otherBot with Second = Some value }
+                                        | _ -> { otherBot with First = Some value }
+                                    otherBot
+                                let (low, high) = 
+                                    match bot.First, bot.Second with
+                                    | Some f, Some s -> if f < s then f, s else s, f
+                                    | _ -> 0, 1
+                                let (bots, output) =
+                                    if lowKind = "output" then bots, output |> Map.add lowIndex low
+                                    else bots |> Map.add lowIndex (setOtherBot lowIndex low), output
+                                let (bots, output) =
+                                    if highKind = "output" then bots, output |> Map.add highIndex high
+                                    else bots |> Map.add highIndex (setOtherBot highIndex high), output
+                                let bots = bots |> Map.add index { bot with First = None; Second = None }
+                                bots, output, if low = 17 && high = 61 then Some index else None
+                            else
+                                // can only operate if has exactly two values
+                                bots, output, None)
+                    Some (index, { First = None; Second = None; Instruction = instruction})
+                | _ -> None)
+            |> Map.ofSeq
+
+        let bots =
+            lines
+            |> Seq.choose (fun line -> 
+                match line with
+                | Regex "value (\d+) goes to bot (\d+)" (valueText::indexText::[]) ->
+                    Some (Integer.Parse valueText, Integer.Parse indexText)
+                | _ -> None)
+            |> asFirst bots
+            ||> Seq.fold (fun bots (value, index) ->
+                let bot = bots |> Map.find index
+                let bot = match bot.First with
+                          | Some _ -> { bot with Second = Some value }
+                          | _ -> { bot with First = Some value }
+                bots |> Map.add index bot)
+
+        bots
+
+    let rec runBots bots output firstAnswer =
+        let filledBots =
+            bots
+            |> Map.toSeq
+            |> Seq.where (fun (_, bot) -> bot.First |> Option.isSome && bot.Second |> Option.isSome)
+            |> Seq.map snd
+            |> Seq.toList
+        if filledBots |> List.isEmpty then bots, output, firstAnswer
+        else
+            let (bots, output, firstAnswer) =
+                ((bots, output, firstAnswer), filledBots)
+                ||> Seq.fold (fun (bots, output, firstAnswer) bot ->
+                    let (bots, output, otherFirstAnswer) = bot.Instruction bot bots output
+                    bots, output, if firstAnswer |> Option.isNone then otherFirstAnswer else firstAnswer)
+            runBots bots output firstAnswer
+
+        
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2016.10.txt"
 
-        let result1 = 0
+        let bots = input |> parse
 
-        let result2 = 0
+        let (_, output, firstAnswer) = (bots, Map.empty, None) |||> runBots
+
+        let result1 = firstAnswer |> Option.defaultValue -1
+
+        let result2 = (output |> Map.find 0) * (output |> Map.find 1) * (output |> Map.find 2)
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day11 =
+    open System
+    open System.Collections.Generic
+    type Floor = | F1 | F2 | F3 | F4
+
+    let floorRank floor =
+        match floor with
+        | F1 -> 0
+        | F2 -> 1
+        | F3 -> 2
+        | F4 -> 3
+
+    type Component = | Microchip of string * Floor | Generator of string * Floor
+    
+    let getFloor ``component`` = match ``component`` with | Microchip (_, floor) | Generator (_, floor) -> floor
+    
+    let getLabel ``component`` = match ``component`` with | Microchip (label, _) | Generator (label, _) -> label
+    
+    let compWithFloor floor ``component`` = 
+        match ``component`` with 
+        | Microchip (label, _) -> Microchip (label, floor)
+        | Generator (label, _) -> Generator (label, floor)
+        
+    let isMicrochip ``component`` = 
+        match ``component`` with 
+        | Microchip _ -> true
+        | Generator _ -> false
+        
+    let isGenerator ``component`` = 
+        match ``component`` with 
+        | Microchip _ -> false
+        | Generator _ -> true
+
+    let getNeighboringFloors floor = match floor with | F1 -> seq { yield F2 } | F2 -> seq { yield F1; yield F3 } | F3 -> seq { yield F2; yield F4 } | F4 -> seq { yield F3 }
+
+    let parse (input:string) = 
+        input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+        |> Seq.choose (fun line ->
+            match line with
+            | Regex "The (?:.+) floor contains nothing relevant\." _ -> None
+            | Regex "The (first|second|third|fourth) floor contains(.*)\." (textFloor::textList::[]) ->
+                let floor =
+                    match textFloor with
+                    | "first" -> F1
+                    | "second" -> F2
+                    | "third" -> F3
+                    | _ -> F4
+                Some (textList.Split([| " a " |], System.StringSplitOptions.None)
+                      |> Seq.choose (fun textComponent -> 
+                        match textComponent with
+                        | Regex "(.+)-compatible microchip" (label::[]) -> Some(Microchip(label, floor))
+                        | Regex "(.+) generator" (label::[]) -> Some(Generator(label, floor))
+                        | _ -> None))
+            | _ -> None)
+        |> Seq.collect identity
+        |> Seq.toArray
+
+    let rec getAllPairs seq =
+        if seq |> Seq.isEmpty then Seq.empty
+        else
+            let first = seq |> Seq.head
+            seq
+            |> Seq.skip 1
+            |> Seq.map (fun element -> first, element)
+            |> Seq.append (getAllPairs (seq |> Seq.skip 1))
+
+    let fourBaseArray = seq { 0. .. 10. } |> Seq.map (fun i -> Math.Pow(4., i) |> int) |> Array.ofSeq
+
+    let rec findSolution components =
+        let queue = Queue<int*Floor*Component array>()
+        queue.Enqueue((0, F1, components))
+        let hashedStateToSteps = Dictionary<int,int>()
+
+        Integer.MaxValue
+        |> Seq.unfold (fun bestSofar ->
+            if queue.Count = 0 then
+                None
+            else 
+                let (stepsSofar, elevator, components) = queue.Dequeue()
+                // get hash of current state
+                let hash = 
+                    seq { yield (elevator |> floorRank) } 
+                    |> Seq.append (components |> Seq.map (getFloor >> floorRank)) 
+                    |> Seq.zip fourBaseArray 
+                    |> Seq.map (fun (floorRank, fourBase) -> floorRank * fourBase)
+                    |> Seq.sum
+                let ``continue`` =
+                    match hashedStateToSteps.TryGetValue hash with
+                    // state already happened worse result
+                    | true, value when value > stepsSofar ->
+                        hashedStateToSteps.[hash] <- stepsSofar
+                        true
+                    // state already happened with at least as good result
+                    | true, value when value <= stepsSofar -> false
+                    // yet unknown state
+                    | _ ->
+                        hashedStateToSteps.[hash] <- stepsSofar
+                        true
+                // check wether not yet in final state
+                let anyComponentsNotOnF4 = components |> Seq.exists (fun comp -> (comp |> getFloor) <> F4)
+                match bestSofar with
+                // abort if this state was already handled
+                | _ when ``continue`` |> not -> Some (bestSofar, bestSofar)
+                // if final state return steps so far, because it is the best result so far
+                | _ when anyComponentsNotOnF4 |> not -> 
+                    let bestSofar = 
+                        if bestSofar > stepsSofar then
+                            printfn "%d" stepsSofar
+                            stepsSofar 
+                        else bestSofar
+                    Some (bestSofar, bestSofar)
+                // if steps so far are equal or greater to the best result then abort
+                | steps when stepsSofar >= steps -> Some (bestSofar, bestSofar)
+                // else 
+                | _ -> 
+                    let neighboringFloors = elevator |> getNeighboringFloors
+                    let componentsOnSameFloor =
+                        components
+                        |> Seq.filter (fun comp -> (comp |> getFloor) = elevator)
+                        |> Seq.toList
+
+                    let validation (targetFloor, movedComponents) =
+                        let checkPreviewFloor comps =
+                            (comps |> Seq.exists isGenerator |> not) ||
+                                (comps
+                                 |> Seq.groupBy getLabel
+                                 |> Seq.exists (fun (_, group) -> (group |> Seq.length) = 1 && (group |> Seq.head |> isMicrochip))
+                                 |> not)
+                        let previewTargetFloor =
+                            components
+                            |> Seq.filter (fun comp -> (comp |> getFloor) = targetFloor)
+                            |> Seq.append movedComponents
+
+                        let previewSourceFloor = 
+                            componentsOnSameFloor
+                            |> Seq.except movedComponents
+
+                        (checkPreviewFloor previewTargetFloor) && (checkPreviewFloor previewSourceFloor)
+
+                    let nextMoves =
+                        componentsOnSameFloor
+                        // get move candidates with one component
+                        |> Seq.collect (fun comp -> neighboringFloors |> Seq.map (fun floor -> floor, [ comp ]))
+                        // get move candidates with two components
+                        |> Seq.append (componentsOnSameFloor |> getAllPairs |> Seq.allPairs neighboringFloors |> Seq.map (fun (floor, (comp0, comp1)) -> floor, [ comp0; comp1 ]))
+                        // validate collected move candidates
+                        |> Seq.filter validation
+                        // sort randomly
+                        //|> scramble random
+                        //|> Seq.sortByDescending (fst >> floorRank)
+                    if nextMoves |> Seq.isEmpty then Some (bestSofar, bestSofar)
+                    else
+                        let stepsSofar = stepsSofar + 1
+                        nextMoves
+                        |> Seq.iter (fun (targetFloor, compList) -> 
+                            let components = components |> Array.map (fun comp -> if compList |> List.exists (equal comp) then comp |> compWithFloor targetFloor else comp)
+                            queue.Enqueue((stepsSofar, targetFloor, components)))
+                        Some (bestSofar,bestSofar))
+        |> Seq.last
+        
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2016.11.txt"
 
-        let result1 = 0
+        let components = input |> parse
+
+        let result1 =  components |> findSolution
 
         let result2 = 0
 

@@ -1,7 +1,11 @@
 ﻿module Operations
 
+open System
 open System.IO
 open System.Reflection
+open System.Security.Cryptography
+open System.Text
+open System.Text.RegularExpressions
 
 let inputFromResource path =
     use stream = 
@@ -15,8 +19,6 @@ let inputFromResource path =
     printfn ""
     input
 
-open System.Security.Cryptography
-open System.Text
 
 let md5 (data : byte array) : string =
     use md5 = MD5.Create()
@@ -26,9 +28,6 @@ let md5 (data : byte array) : string =
 
 let inline asSecond first second = second, first
 let inline asFirst first second = first, second
-
-
-open System.Text.RegularExpressions
 
 let (|Regex|_|) pattern input =
     let m = Regex.Match(input, pattern)
@@ -56,3 +55,19 @@ let Array2DgetRow r (A:_[,]) =
     
 let alwaysTrue _ = true
 let alwaysFalse _ = false
+
+let equal element0 element1 = element0 = element1
+
+let scramble (rnd:Random) (sqn : seq<'T>) = 
+    let rec scramble2 (sqn : seq<'T>) = 
+        /// Removes an element from a sequence.
+        let remove n sqn = sqn |> Seq.filter (fun x -> x <> n)
+ 
+        seq {
+            let x = sqn |> Seq.item (rnd.Next(0, sqn |> Seq.length))
+            yield x
+            let sqn' = remove x sqn
+            if not (sqn' |> Seq.isEmpty) then
+                yield! scramble2 sqn'
+        }
+    if sqn |> Seq.isEmpty then Seq.empty else scramble2 sqn
