@@ -738,22 +738,189 @@ module Day11 =
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day12 =
+    type Program = { InstructionPointer:int; Registers:Map<char,int>; Instructions:(Program->Program) array}
+
+    let nop prog = { prog with InstructionPointer = prog.InstructionPointer + 1 }
+
+    let parse (input:string) =
+        let instructions =
+            input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+            |> Seq.choose (fun line -> 
+                match line with
+                | Regex "cpy (.+) (.)" (textValue::textReg::[]) ->
+                    let regToCopyTo = textReg.Chars 0
+                    match Integer.TryParse textValue with
+                    | true, value -> Some (fun prog ->
+                        { prog with InstructionPointer = prog.InstructionPointer + 1; Registers = prog.Registers |> Map.add regToCopyTo value})
+                    | false, _ -> 
+                        let regToCopyFrom = textValue.Chars 0
+                        Some (fun prog ->
+                            let value = prog.Registers |> Map.find regToCopyFrom
+                            { prog with InstructionPointer = prog.InstructionPointer + 1; Registers = prog.Registers |> Map.add regToCopyTo value})
+                | Regex "inc (.)" (textReg::[]) ->
+                    let regToIncreace = textReg.Chars 0
+                    Some (fun prog ->
+                        let value = (prog.Registers |> Map.find regToIncreace) + 1
+                        { prog with InstructionPointer = prog.InstructionPointer + 1; Registers = prog.Registers |> Map.add regToIncreace value})
+                | Regex "dec (.)" (textReg::[]) ->
+                    let regToDecreace = textReg.Chars 0
+                    Some (fun prog ->
+                        let value = (prog.Registers |> Map.find regToDecreace) - 1
+                        { prog with InstructionPointer = prog.InstructionPointer + 1; Registers = prog.Registers |> Map.add regToDecreace value})
+                | Regex "jnz (.+) (.+)" (textValue::textOffset::[]) ->
+                    match Integer.TryParse textValue, Integer.TryParse textOffset with
+                    | (true, value), (true, offset) ->
+                        if value = 0 then Some nop 
+                        else Some (fun prog -> { prog with InstructionPointer = prog.InstructionPointer + (offset |> int) })
+                    | (true, value), (false, _) ->
+                        if value = 0 then Some nop 
+                        else 
+                            let offsetReg = textOffset.Chars 0
+                            Some (fun prog -> 
+                                    let offset = prog.Registers |> Map.find offsetReg
+                                    { prog with InstructionPointer = prog.InstructionPointer + (offset |> int) })
+                    | (false, _), (true, offset) ->
+                        let valueReg = textValue.Chars 0
+                        Some (fun prog ->
+                                let value = prog.Registers |> Map.find valueReg
+                                if value = 0 then prog |> nop
+                                else { prog with InstructionPointer = prog.InstructionPointer + (offset |> int) })
+                    | (false, _), (false, _) ->
+                        let valueReg = textValue.Chars 0
+                        let offsetReg = textOffset.Chars 0
+                        Some (fun prog ->
+                                let value = prog.Registers |> Map.find valueReg
+                                let offset = prog.Registers |> Map.find offsetReg
+                                if value = 0 then prog |> nop
+                                else { prog with InstructionPointer = prog.InstructionPointer + (offset |> int) })
+                | _ -> None)
+            |> Seq.toArray
+        { InstructionPointer = 0; Registers = (seq { for c in 'a' .. 'd' do yield (c, 0)} |> Map.ofSeq); Instructions = instructions }
+
+    let runProgram prog =
+        prog
+        |> Seq.unfold (fun prog ->
+            if prog.InstructionPointer < 0 || prog.InstructionPointer >= prog.Instructions.Length then
+                None
+            else
+                let prog = prog.Instructions.[prog.InstructionPointer] prog
+                Some (prog, prog))
+        |> Seq.last
+
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2016.12.txt"
 
-        let result1 = 0
+        let prog = input |> parse
 
-        let result2 = 0
+        let result1 = (prog |> runProgram).Registers |> Map.find 'a'
+
+        let result2 = ({ prog with Registers = prog.Registers |> Map.add 'c' 1 } |> runProgram).Registers |> Map.find 'a'
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day13 =
+    open FSharpx.Collections
+    open System
+    let parse (input:string) = Integer.Parse input
+
+    type Coordinate = Coordinate of X:int*Y:int
+
+    [<CustomEquality>]
+    [<CustomComparison>]
+    type PrioCoordinate = 
+        PrioCoordinate of Coordinate*int
+            interface IComparable<PrioCoordinate> with
+                member this.CompareTo other =
+                    let distance coord = match coord with | PrioCoordinate (Coordinate(x, y), _) -> Math.Abs(x - 31) + Math.Abs(y - 39)
+                    let thisDistance = this |> distance
+                    let otherDistance = other |> distance
+                    compare thisDistance otherDistance
+            interface IComparable with
+                member this.CompareTo obj =
+                    match obj with
+                        | null                 -> 1
+                        | :? PrioCoordinate as other -> (this :> IComparable<_>).CompareTo other
+                        | _                    -> invalidArg "obj" "not a PrioCoordinate"
+            interface IEquatable<PrioCoordinate> with
+                member this.Equals other =
+                    let (myCoord, mySteps) = match this with | PrioCoordinate (coord, steps) -> coord, steps
+                    let (theirCoord, theirSteps) = match other with | PrioCoordinate (coord, steps) -> coord, steps
+                    myCoord = theirCoord && mySteps = theirSteps
+            override x.Equals(obj) =
+                match obj with
+                    | null                 -> false
+                    | :? PrioCoordinate as other -> (x :> IEquatable<PrioCoordinate>).Equals other
+                    | _                    -> invalidArg "obj" "not a PrioCoordinate"
+            override x.GetHashCode() =
+                match x with | PrioCoordinate (coord, _) -> coord.GetHashCode()
+
+    
+    let isOpenSpace favNumber coordinate =
+        let (x, y) = match coordinate with | Coordinate (x, y) -> x, y
+        let countOnes x =                            
+            let rec count b acc = if b = 0 then acc else count (b &&& (b-1)) (acc+1) 
+            count x 0
+        ((x*x + 3*x + 2*x*y + y + y*y + favNumber) |> countOnes) % 2 = 0
+
+    let getOpenSpaceAndWallCandits favNumber openSpaces walls x y =
+        seq { yield x - 1, y; yield x + 1, y; yield x, y - 1; yield x, y + 1}
+        |> Seq.filter (fun (x,y) -> x >= 0 && y >= 0)
+        |> Seq.map Coordinate
+        |> Seq.filter (fun coord -> (openSpaces |> Set.contains coord |> not) && (walls |> Set.contains coord |> not))
+        |> Seq.toList
+        |> List.partition (isOpenSpace favNumber)
+
+    let getSteps favNumber =
+
+        let initialPoint = Coordinate (1, 1)
+        let initialPrioCoord = PrioCoordinate (initialPoint, 0)
+        let walls = Set.empty
+        let openSpaces = Set.empty |> Set.add initialPoint
+        let queue = PriorityQueue.empty false |> PriorityQueue.insert initialPrioCoord
+
+        (queue, openSpaces, walls, false)
+        |> Seq.unfold (fun (queue, openSpaces, walls, abort) ->
+            if abort then None
+            else
+                let (prioCoord, queue) = queue |> PriorityQueue.pop
+                let (x, y, steps) = match prioCoord with | PrioCoordinate (Coordinate(x, y), steps) -> x, y, steps
+                if x = 31 && y = 39 then
+                    Some (steps, (queue, openSpaces, walls, true))
+                else
+                    let (openSpaceCandits, wallCandits) = (x, y) ||> getOpenSpaceAndWallCandits favNumber openSpaces walls
+                    let walls = (walls, wallCandits) ||> Seq.fold (fun walls wall -> walls |> Set.add wall)
+                    let openSpaces = (openSpaces, openSpaceCandits) ||> Seq.fold (fun openSpaces openSpace -> openSpaces |> Set.add openSpace)
+                    let queue = (queue, openSpaceCandits) ||> Seq.fold (fun queue openSpace -> queue |> PriorityQueue.insert (PrioCoordinate(openSpace, steps + 1)))
+                    Some (steps, (queue, openSpaces, walls, false)))
+        |> Seq.last
+
+    let getLocations favNumber =
+
+        let initialPoint = Coordinate (1, 1)
+        let initialPrioCoord = PrioCoordinate (initialPoint, 0)
+        let walls = Set.empty
+        let openSpaces = Set.empty |> Set.add initialPoint
+        let queue = Queue.empty |> Queue.conj initialPrioCoord
+
+        (queue, openSpaces, walls)
+        |> Seq.unfold (fun (queue, openSpaces, walls) ->
+            if queue |> Queue.isEmpty then None
+            else
+                let (prioCoord, queue) = queue |> Queue.uncons
+                let (x, y, steps) = match prioCoord with | PrioCoordinate (Coordinate(x, y), steps) -> x, y, steps
+                let (openSpaceCandits, wallCandits) = (x, y) ||> getOpenSpaceAndWallCandits favNumber openSpaces walls
+                let walls = (walls, wallCandits) ||> Seq.fold (fun walls wall -> walls |> Set.add wall)
+                let openSpaces = (openSpaces, openSpaceCandits) ||> Seq.fold (fun openSpaces openSpace -> openSpaces |> Set.add openSpace)
+                let queue = if steps >= 50 then queue else (queue, openSpaceCandits) ||> Seq.fold (fun queue openSpace -> queue |> Queue.conj (PrioCoordinate(openSpace, steps + 1)))
+                Some (1, (queue, openSpaces, walls)))
+        |> Seq.sum
+
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2016.13.txt"
 
-        let result1 = 0
+        let result1 = input |> parse |> getSteps
 
-        let result2 = 0
+        let result2 = input |> parse |> getLocations
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
