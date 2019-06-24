@@ -925,16 +925,14 @@ module Day13 =
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day14 =
-    open FSharp.Collections.ParallelSeq
-
     let stringToMd5 text =
         text |> Seq.map (fun c -> c |> byte) |> Seq.toArray |> md5
 
     let parse f (input:string) =
         let initialArray = 
             seq { for i in 0 .. 1000 do yield sprintf "%s%d" input i }
-            |> PSeq.map f 
-            |> PSeq.toArray
+            |> Seq.map f 
+            |> Seq.toArray
         input, 0, initialArray
 
     let getSearchedIndex f salt index (array:string array) =
