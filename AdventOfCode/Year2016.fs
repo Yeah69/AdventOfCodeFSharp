@@ -925,12 +925,70 @@ module Day13 =
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day14 =
+    open FSharp.Collections.ParallelSeq
+
+    let stringToMd5 text =
+        text |> Seq.map (fun c -> c |> byte) |> Seq.toArray |> md5
+
+    let parse f (input:string) =
+        let initialArray = 
+            seq { for i in 0 .. 1000 do yield sprintf "%s%d" input i }
+            |> PSeq.map f 
+            |> PSeq.toArray
+        input, 0, initialArray
+
+    let getSearchedIndex f salt index (array:string array) =
+        let getIndexAndCharsOfTriplets i = 
+            i
+            |> Seq.unfold (fun i ->
+                let currentHash = array.[(i % 1001)]
+                let triplets = 
+                    seq { 0 .. currentHash.Length - 3} 
+                    |> Seq.filter (fun i ->
+                        let c = currentHash.Chars i
+                        currentHash.Chars (i + 1) = c && currentHash.Chars (i + 2) = c)
+                    |> Seq.map (fun i -> currentHash.Chars i)
+                    |> Seq.distinct
+                    |> Seq.toArray
+                array.[(i % 1001)] <- sprintf "%s%d" salt (i + 1001) |> f
+                Some ((i, triplets), i + 1))
+            |> Seq.filter (fun (_, triplets) -> triplets |> Seq.isEmpty |> not)
+            |> Seq.head
+
+        index
+        |> Seq.unfold (fun i ->
+            let (tripletIndex, tripletChars) = i |> getIndexAndCharsOfTriplets
+            let quintupletCheck = 
+                seq { for ind in tripletIndex + 1 .. tripletIndex + 1000 do yield ind % 1001 }
+                |> Seq.exists (fun subI ->
+                    let hash = array.[subI]
+                    tripletChars
+                    |> Seq.exists (fun c ->
+                        seq { 0 .. hash.Length - 5} 
+                        |> Seq.exists (fun charI ->
+                            hash.Chars charI = c 
+                            && hash.Chars (charI + 1) = c 
+                            && hash.Chars (charI + 2) = c
+                            && hash.Chars (charI + 3) = c
+                            && hash.Chars (charI + 4) = c)))
+            Some ((quintupletCheck, tripletIndex), tripletIndex + 1))
+        |> Seq.filter fst
+        |> Seq.skip 64
+        |> Seq.map snd
+        |> Seq.head
+
+    let getHashForSecond (text:string) =
+        (text, { 0 .. 2016 }) ||> Seq.fold (fun prev _ -> prev |> stringToMd5)
+
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2016.14.txt"
+        
+        printfn "This solution could take approximately five minutes!!!"
+        printfn ""
 
-        let result1 = 0
+        let result1 = input |> parse stringToMd5 |||> getSearchedIndex stringToMd5
 
-        let result2 = 0
+        let result2 = input |> parse getHashForSecond |||> getSearchedIndex getHashForSecond
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
