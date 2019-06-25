@@ -991,12 +991,42 @@ module Day14 =
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day15 =
+    type Disc = { TimeOffset:int; PositionOffset:int; PositionCount:int }
+
+    let parse (input:string) =
+        input.Split( [| System.Environment.NewLine |], System.StringSplitOptions.None)
+        |> Seq.choose (fun line ->
+            match line with
+            | Regex "Disc #(\d+) has (\d+) positions; at time=0, it is at position (\d+)." (textTimeOffset::textPositonCount::textPositionOffset::[]) ->
+                Some { TimeOffset = Integer.Parse textTimeOffset; PositionOffset = Integer.Parse textPositionOffset; PositionCount = Integer.Parse textPositonCount }
+            | _ -> None)
+        |> Seq.toArray
+
+    let findFirstValidButtonClick discs =
+        let maxPositionCountDisc = discs |> Array.maxBy (fun disc -> disc.PositionCount)
+        
+        let initialTime = maxPositionCountDisc.PositionCount - (maxPositionCountDisc.TimeOffset + maxPositionCountDisc.PositionOffset)
+        let distance = maxPositionCountDisc.PositionCount
+
+        initialTime
+        |> Seq.unfold (fun time ->
+            Some (time, time + distance))
+        |> Seq.filter (fun time -> 
+            discs
+            |> Array.exists (fun disc -> (time + disc.PositionOffset + disc.TimeOffset) % disc.PositionCount <> 0)
+            |> not)
+        |> Seq.head
+
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2016.15.txt"
 
-        let result1 = 0
+        let discs = input |> parse
 
-        let result2 = 0
+        let result1 = discs |> findFirstValidButtonClick
+
+        let maxTimeOffset = discs |> Seq.map (fun disc -> disc.TimeOffset) |> Seq.max
+
+        let result2 = (discs, [| { TimeOffset = maxTimeOffset + 1; PositionOffset = 0; PositionCount = 11 } |]) ||> Array.append |> findFirstValidButtonClick
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
