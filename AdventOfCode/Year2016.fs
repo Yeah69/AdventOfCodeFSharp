@@ -1146,28 +1146,8 @@ module Day18 =
 
 module Day19 =
     type Node = { Value:int; mutable Next:Node option }
-    let parseFirst (input:string) =
-        let count = Integer.Parse input
-        seq { 1 .. count } |> Seq.toList
-
-    let determineLastElfFirst elfList =
-        let rec iteration list =
-            match list with
-            | [] | _::[] -> list
-            | first::_::remainder -> first::(iteration remainder)
-
-        elfList
-        |> Seq.unfold (fun elfList ->
-            let isListOdd = (elfList |> List.length) % 2 = 1
-            let newList = elfList |> List.chunkBySize 2000 |> List.map iteration |> List.concat
-            let newList = if isListOdd then newList |> List.tail else newList
-            Some (newList, newList))
-        |> Seq.filter (fun list -> match list with | _::[] -> true | _ -> false)
-        |> Seq.map List.head
-        |> Seq.head
         
-        
-    let parseSecond (input:string) =
+    let parse (input:string) =
         let count = Integer.Parse input
         let last = { Value = count; Next = None }
         let first =
@@ -1176,26 +1156,39 @@ module Day19 =
         last.Next <- Some first
         let half = count / 2
         let beforeHalfNode = (first, seq { 1 .. half - 1 }) ||> Seq.fold (fun prev _ -> prev.Next |> Option.defaultValue prev)
-        beforeHalfNode, count
+        first, beforeHalfNode, count
+
+    let determineLastElfFirst (firstNode:Node) count =
+        let last =
+            (firstNode, seq { count .. -1 .. 2 })
+            ||> Seq.fold (fun node _ ->
+                node.Next <- (node.Next |> Option.defaultValue node).Next
+                let node = node.Next |> Option.defaultValue node
+                node)
+        last.Value
 
     let determineLastElfSecond (beforeHalfNode:Node) count =
         let last =
             (beforeHalfNode, seq { count .. -1 .. 2 })
-            ||> Seq.fold (fun beforeHalfNode count ->
+            ||> Seq.fold (fun node count ->
                 let isOdd = count % 2 = 1
-                beforeHalfNode.Next <- (beforeHalfNode.Next |> Option.defaultValue beforeHalfNode).Next
-                let beforeHalfNode = 
-                    if isOdd then beforeHalfNode.Next |> Option.defaultValue beforeHalfNode
-                    else beforeHalfNode
-                beforeHalfNode)
+                node.Next <- (node.Next |> Option.defaultValue node).Next
+                let node = 
+                    if isOdd then node.Next |> Option.defaultValue node
+                    else node
+                node)
         last.Value
 
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2016.19.txt"
 
-        let result1 = input |> parseFirst |> determineLastElfFirst
+        let (first, _, count) = input |> parse
 
-        let result2 = input |> parseSecond ||> determineLastElfSecond
+        let result1 = (first, count) ||> determineLastElfFirst
+        
+        let (_, beforeHalfNode, count) = input |> parse
+
+        let result2 = (beforeHalfNode, count) ||> determineLastElfSecond
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
