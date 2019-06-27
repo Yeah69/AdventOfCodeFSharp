@@ -1066,15 +1066,48 @@ module Day16 =
         { First = result1; Second = result2 }
 
 module Day17 =
-        
+    open System.Collections.Generic
+    let getShortestPath (password:string) =
+        let queue = Queue<int*int*string>()
+
+        queue.Enqueue(0, 0, "")
+
+        ()
+        |> Seq.unfold (fun _ ->
+            if queue.Count = 0 then None
+            else
+                let (x, y, suffix) = queue.Dequeue()
+                let hash = (sprintf "%s%s" password suffix) |> Seq.map (fun c -> c |> byte) |> Seq.toArray |> md5
+                let validNextMoves =
+                    seq {
+                            if hash.[0] >= 'b' then yield x, y - 1, sprintf "%s%c" suffix 'U'
+                            if hash.[1] >= 'b' then yield x, y + 1, sprintf "%s%c" suffix 'D'
+                            if hash.[2] >= 'b' then yield x - 1, y, sprintf "%s%c" suffix 'L'
+                            if hash.[3] >= 'b' then yield x + 1, y, sprintf "%s%c" suffix 'R'
+                        }
+                    |> Seq.filter (fun (x, y, _) -> 
+                        x >= 0 && x <= 3 && y >= 0 && y <= 3)
+                    |> Seq.toList
+                let (goals, continues) =
+                    validNextMoves
+                    |> List.partition (fun (x, y, _) -> x = 3 && y = 3)
+                continues |> Seq.iter (fun t -> queue.Enqueue t)
+                Some ((if goals |> List.isEmpty |> not then goals |> List.head else (x, y, suffix)), ()))
+        |> Seq.filter (fun (x, y, _) -> x = 3 && y = 3)
+        |> Seq.map (fun (_, _, path) -> path)
+        |> Seq.toArray
+
+
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2016.17.txt"
 
-        let result1 = 0
+        let solutions = input |> getShortestPath
 
-        let result2 = 0
+        let result1 = solutions.[0]
 
-        { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
+        let result2 = solutions |> Array.last |> String.length
+
+        { First = result1; Second = sprintf "%d" result2 }
 
 module Day18 =
     let go() =
