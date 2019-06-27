@@ -1031,16 +1031,42 @@ module Day15 =
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day16 =
+    let getChecksum dataLength (input:string)  =
+        let data =
+            input
+            |> Seq.unfold (fun a ->
+                let b = a |> Seq.rev |> Seq.map(fun c -> if c = '1' then "0" else "1") |> String.concat ""
+                let out = sprintf "%s0%s" a b
+                Some (out, out))
+            |> Seq.filter (fun d -> d.Length >= dataLength)
+            |> Seq.map (fun d -> d.Substring(0, dataLength))
+            |> Seq.head
+
+        data
+        |> Seq.unfold (fun d -> 
+            let checksum =
+                d
+                |> Seq.chunkBySize 2
+                |> Seq.map (fun chars -> 
+                    match chars.[0], chars.[1] with
+                    | '1', '1' | '0', '0' -> "1"
+                    | _ -> "0")
+                |> String.concat ""
+            Some (checksum, checksum))
+        |> Seq.filter (fun cs -> cs.Length % 2 = 1)
+        |> Seq.head
+
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2016.16.txt"
 
-        let result1 = 0
+        let result1 = input |> getChecksum 272
 
-        let result2 = 0
+        let result2 = input |> getChecksum 35651584
 
-        { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
+        { First = result1; Second = result2 }
 
 module Day17 =
+        
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2016.17.txt"
 
