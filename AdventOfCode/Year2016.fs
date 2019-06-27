@@ -1110,22 +1110,92 @@ module Day17 =
         { First = result1; Second = sprintf "%d" result2 }
 
 module Day18 =
+    type Tile = | Safe | Trap
+
+    let parse (input:string) =
+        input
+        |> Seq.choose (fun c -> 
+            match c with
+            | '.' -> Some Safe
+            | '^' -> Some Trap
+            | _ -> None)
+        |> Seq.toArray
+
+    let getSafeCount rowCount firstRow =
+        (firstRow, seq { 1 .. rowCount - 1 })
+        ||> Seq.scan (fun firstRow _ ->
+            let completeRow = seq { yield [| Safe |]; yield firstRow; yield [| Safe |] } |> Array.concat
+            seq { 1 .. completeRow.Length - 2 }
+            |> Seq.map (fun i -> 
+                match completeRow.[i - 1], completeRow.[i], completeRow.[i + 1] with
+                | Trap, Trap, Safe | Safe, Trap, Trap | Trap, Safe, Safe | Safe, Safe, Trap -> Trap
+                | _ -> Safe)
+            |> Seq.toArray)
+        |> Seq.collect identity
+        |> Seq.filter (fun tile -> tile = Safe)
+        |> Seq.length
+
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2016.18.txt"
 
-        let result1 = 0
+        let result1 = input |> parse |> getSafeCount 40
 
-        let result2 = 0
+        let result2 = input |> parse |> getSafeCount 400_000
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day19 =
+    type Node = { Value:int; mutable Next:Node option }
+    let parseFirst (input:string) =
+        let count = Integer.Parse input
+        seq { 1 .. count } |> Seq.toList
+
+    let determineLastElfFirst elfList =
+        let rec iteration list =
+            match list with
+            | [] | _::[] -> list
+            | first::_::remainder -> first::(iteration remainder)
+
+        elfList
+        |> Seq.unfold (fun elfList ->
+            let isListOdd = (elfList |> List.length) % 2 = 1
+            let newList = elfList |> List.chunkBySize 2000 |> List.map iteration |> List.concat
+            let newList = if isListOdd then newList |> List.tail else newList
+            Some (newList, newList))
+        |> Seq.filter (fun list -> match list with | _::[] -> true | _ -> false)
+        |> Seq.map List.head
+        |> Seq.head
+        
+        
+    let parseSecond (input:string) =
+        let count = Integer.Parse input
+        let last = { Value = count; Next = None }
+        let first =
+            (last, seq { count - 1 .. -1 .. 1 })
+            ||> Seq.fold (fun prev i -> { Value = i; Next = Some prev })
+        last.Next <- Some first
+        let half = count / 2
+        let beforeHalfNode = (first, seq { 1 .. half - 1 }) ||> Seq.fold (fun prev _ -> prev.Next |> Option.defaultValue prev)
+        beforeHalfNode, count
+
+    let determineLastElfSecond (beforeHalfNode:Node) count =
+        let last =
+            (beforeHalfNode, seq { count .. -1 .. 2 })
+            ||> Seq.fold (fun beforeHalfNode count ->
+                let isOdd = count % 2 = 1
+                beforeHalfNode.Next <- (beforeHalfNode.Next |> Option.defaultValue beforeHalfNode).Next
+                let beforeHalfNode = 
+                    if isOdd then beforeHalfNode.Next |> Option.defaultValue beforeHalfNode
+                    else beforeHalfNode
+                beforeHalfNode)
+        last.Value
+
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2016.19.txt"
 
-        let result1 = 0
+        let result1 = input |> parseFirst |> determineLastElfFirst
 
-        let result2 = 0
+        let result2 = input |> parseSecond ||> determineLastElfSecond
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
