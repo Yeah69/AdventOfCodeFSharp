@@ -1294,18 +1294,6 @@ module Day21 =
         currText.Replace(subString, reversed)
 
     let reverseDirection direction = match direction with | Left -> Right | Right -> Left
-    
-    let reverseRotateSteps pos =
-        match pos with
-        | 0 -> 1
-        | 1 -> 1
-        | 2 -> 6
-        | 3 -> 2
-        | 4 -> 7
-        | 5 -> 3
-        | 6 -> 0
-        | 7 -> 4
-        | _ -> 0
 
     let scramble (text:string) instructions =
         (text, instructions)
@@ -1327,6 +1315,13 @@ module Day21 =
                 
 
     let unscramble (text:string) instructions =
+        let reverseRotateBasedOnLetterMap =
+            seq { 0 .. text.Length - 1 }
+            |> Seq.map (fun i -> 
+                let steps = if i < 4 then i + 1 else i + 2
+                let pos = (i + steps) % text.Length
+                pos, steps)
+            |> Map.ofSeq
         (text, instructions |> Seq.rev)
         ||> Seq.fold (fun currText instruction ->
             match instruction with
@@ -1337,7 +1332,7 @@ module Day21 =
             | RotateSteps (direction, steps) -> currText |> rotate (direction |> reverseDirection) (steps % currText.Length)
             | RotateBasedOnLetter (letter) ->
                 let indexOfLetter = currText.IndexOf letter
-                let steps = indexOfLetter |> reverseRotateSteps
+                let steps = reverseRotateBasedOnLetterMap |> Map.find indexOfLetter
                 currText |> rotate Left (steps % currText.Length)
             | ReversePositions (start, finish) -> currText |> reverse start finish
             | MovePosition (first, second) -> 
