@@ -1583,12 +1583,169 @@ module Day23 =
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day24 =
+    type Node = { Position:int*int; mutable Up:(Node*int) option; mutable Down:(Node*int) option; mutable Left:(Node*int) option; mutable Right:(Node*int) option; Value: int option}
+    let isSameObject = LanguagePrimitives.PhysicalEquality
+    let isSame opt proxyNode =
+        match opt with
+        | Some (n, _) when isSameObject n proxyNode -> true
+        | _ -> false
+
+    let parse (input:string) =
+        let map =
+            input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+            |> Seq.mapi (fun y line -> y, line)
+            |> Seq.collect (fun (y, line) -> 
+                line 
+                |> Seq.mapi(fun x c -> x, c) 
+                |> Seq.filter (snd >> (unequal '#')) 
+                |> Seq.map (fun (x, c) -> x, y, c))
+            |> Seq.map (fun (x, y, c) -> 
+                let value = if c = '.' then None else Some (Integer.Parse (c.ToString()))
+                (x, y), { Position=(x, y); Up=None; Down=None; Left=None; Right=None; Value=value })
+            |> Map.ofSeq
+        map
+        |> Map.toSeq
+        |> Seq.iter (fun ((x, y), node) ->
+            let setupBranch set pos =
+                let node = map |> Map.tryFind pos
+                match node with
+                | Some node -> set node
+                | None -> ()
+            (x, y - 1) |> setupBranch (fun otherNode -> node.Up <- Some (otherNode, 1))
+            (x, y + 1) |> setupBranch (fun otherNode -> node.Down <- Some (otherNode, 1))
+            (x - 1, y) |> setupBranch (fun otherNode -> node.Left <- Some (otherNode, 1))
+            (x + 1, y) |> setupBranch (fun otherNode -> node.Right <- Some (otherNode, 1)))
+
+        let removingCriteria endpointCount node =
+            if node.Value |> Option.isSome then false
+            else
+                let countOfSome = 
+                    seq { yield node.Up; yield node.Down; yield node.Left; yield node.Right }
+                    |> Seq.filter (fun opt -> opt |> Option.isSome)
+                    |> Seq.length
+                countOfSome = endpointCount
+
+        // remove with only two endpoints
+        let binaryNodes =
+            map
+            |> Map.toSeq
+            |> Seq.filter (snd >> (removingCriteria 2))
+            |> Seq.toList
+        binaryNodes
+        |> Seq.iter (fun (_, node) ->
+            let getDistance opt = match opt with | Some (_, dist) -> dist | _ -> Integer.MaxValue
+            let setter node proxyNode =
+                if isSame node.Up proxyNode then (fun otherNode dist -> node.Up <- Some (otherNode, dist))
+                elif isSame node.Down proxyNode then (fun otherNode dist -> node.Down <- Some (otherNode, dist))
+                elif isSame node.Left proxyNode then (fun otherNode dist -> node.Left <- Some (otherNode, dist))
+                elif isSame node.Right proxyNode then (fun otherNode dist -> node.Right <- Some (otherNode, dist))
+                else (fun _ _ -> ())
+
+            match node.Up, node.Down, node.Left, node.Right with
+            | Some (node1, dist1), Some (node2, dist2), None, None
+            | Some (node1, dist1), None, Some (node2, dist2), None
+            | Some (node1, dist1), None, None, Some (node2, dist2)
+            | None, Some (node1, dist1), Some (node2, dist2), None
+            | None, Some (node1, dist1), None, Some (node2, dist2)
+            | None, None, Some (node1, dist1), Some (node2, dist2) -> 
+                let (setter1, setter2) = (setter node1 node), (setter node2 node)
+                let dist = dist1 + dist2
+                setter1 node2 dist
+                setter2 node1 dist
+            | _ -> ())
+        let map =
+            (map, binaryNodes)
+            ||> Seq.fold (fun map (pos, _) -> map |> Map.remove pos)
+
+        // remove deadlocks
+        let deadlocks =
+            map
+            |> Map.toSeq
+            |> Seq.filter (snd >> (removingCriteria 1))
+            |> Seq.toList
+        deadlocks
+        |> Seq.iter (fun (_, deadLockNode) ->
+            match deadLockNode.Up, deadLockNode.Down, deadLockNode.Left, deadLockNode.Right with
+            | Some (node, _), None, None, None
+            | None, Some (node, _), None, None
+            | None, None, Some (node, _), None
+            | None, None, None, Some (node, _) -> 
+                if isSame node.Up deadLockNode then node.Up <- None
+                elif isSame node.Down deadLockNode then node.Down <- None
+                elif isSame node.Left deadLockNode then node.Left <- None
+                elif isSame node.Right deadLockNode then node.Right <- None
+                else ()
+            // This case may happen with unreachable segments
+            | _ -> ())
+        let map =
+            (map, deadlocks)
+            ||> Seq.fold (fun map (pos, _) -> map |> Map.remove pos)
+
+        map
+
+    let determineShortestRoundTrip map =
+        let rec shortestPaths distanceSofar node spMap =
+            let checkPath opt spMap =
+                match opt with 
+                | Some (nextNode, distance) -> 
+                    let distanceSofar = distanceSofar + distance
+                    match spMap |> Map.tryFind nextNode.Position with
+                    | Some dist when dist > distanceSofar -> shortestPaths distanceSofar nextNode spMap
+                    | None -> shortestPaths distanceSofar nextNode spMap
+                    | _ -> spMap
+                | _ -> spMap
+            let spMap = 
+                spMap 
+                |> Map.add node.Position distanceSofar 
+                |> checkPath node.Up 
+                |> checkPath node.Down 
+                |> checkPath node.Left 
+                |> checkPath node.Right
+            spMap
+
+        let rec shortestRoute f number distanceSofar numbersToGo distances =
+            if numbersToGo |> Set.isEmpty then f number distanceSofar
+            else
+                numbersToGo
+                |> Seq.map (fun i ->
+                    let dist = distances |> Map.find (number, i)
+                    shortestRoute f i (dist + distanceSofar) (numbersToGo |> Set.remove i) distances)
+                |> Seq.min
+
+        let numberMap =
+            map
+            |> Map.toSeq
+            |> Seq.choose (fun (_, node) -> node.Value |> Option.bind (fun value -> Some (value, node)))
+            |> Map.ofSeq
+
+        let distancesToTheNumbers =
+            numberMap
+            |> Map.toSeq
+            |> asFirst Map.empty
+            ||> Seq.fold (fun map (number, node) ->
+                let shortestPathsMap = shortestPaths 0 node Map.empty
+                let shortPathSeq =
+                    numberMap
+                    |> Map.toSeq
+                    |> Seq.filter (fst >> (unequal number))
+                    |> Seq.map (fun (otherNumber, otherNode) -> 
+                        otherNumber, shortestPathsMap |> Map.find otherNode.Position)
+                (map, shortPathSeq)
+                ||> Seq.fold (fun map (otherNumber, distance) ->
+                    map |> Map.add (number, otherNumber) distance |> Map.add (otherNumber, number) distance))
+
+        let first =
+            shortestRoute (fun _ dist -> dist) 0 0 (numberMap |> Map.toSeq |> Seq.map fst |> Seq.filter (unequal 0) |> Set.ofSeq) distancesToTheNumbers
+        let second =
+            shortestRoute (fun number dist -> dist + (distancesToTheNumbers |> Map.find (number, 0))) 0 0 (numberMap |> Map.toSeq |> Seq.map fst |> Seq.filter (unequal 0) |> Set.ofSeq) distancesToTheNumbers
+        first, second
+    
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2016.24.txt"
 
-        let result1 = 0
+        let map = input |> parse
 
-        let result2 = 0
+        let (result1, result2) = map |> determineShortestRoundTrip
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 

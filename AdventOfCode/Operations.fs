@@ -58,6 +58,8 @@ let alwaysFalse _ = false
 
 let equal element0 element1 = element0 = element1
 
+let unequal element0 element1 = element0 <> element1
+
 let scramble (rnd:Random) (sqn : seq<'T>) = 
     let rec scramble2 (sqn : seq<'T>) = 
         /// Removes an element from a sequence.
