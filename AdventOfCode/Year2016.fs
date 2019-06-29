@@ -1356,23 +1356,235 @@ module Day21 =
         { First = result1; Second = result2 }
 
 module Day22 =
+    open System
+    open System.Collections.Generic
+    type FromDirection = | Left | Right | Below
+    let parse (input:string) =
+        input.Split ([| System.Environment.NewLine |], System.StringSplitOptions.None)
+        |> Seq.skip 2
+        |> Seq.choose (fun line ->
+            match line with
+            | Regex "/dev/grid/node\-x(\d+)\-y(\d+)\s*\d+T\s*(\d+)T\s*(\d+)T\s*\d+%" (textX::textY::textUsed::textAvail::[]) -> 
+                Some ((Integer.Parse textX, Integer.Parse textY), (Integer.Parse textUsed, Integer.Parse textAvail))
+            | _ -> None)
+        |> Map.ofSeq
+
+    let getCountOfViablePairs map =
+        map
+        |> Map.toSeq
+        |> Seq.allPairs (map |> Map.toSeq)
+        |> Seq.filter (fun (((xA, yA), (usedA, _)), ((xB, yB), (_, availB))) ->
+            (xA <> xB || yA <> yB) && usedA <> 0 && usedA <= availB)
+        |> Seq.length
+
+    let getMinStepsToGoal map =
+        let maxY = map |> Map.toSeq |> Seq.map (fst >> snd) |> Seq.max
+        let goal = (0, maxY)
+        let goalZero = (0, maxY - 1)
+
+        let zeroStatesDict = Dictionary<(int*int), int>()
+
+        let rec stepsToZeroGoal currZero currSteps fromDir currSolution =
+            zeroStatesDict.[currZero] <- currSteps
+            let (currZeroX, currZeroY) = currZero
+            match currSolution with
+            | Some steps when steps < currSteps || goal = currZero || currZeroX < 0 || currZeroY < 0 || currZeroY > maxY -> None
+            | _ ->
+                if currZero = goalZero then Some currSteps
+                else
+                    let currAvail = 
+                        let (used, avail) = map |> Map.find currZero
+                        used + avail
+                    let nextMoves =
+                        match fromDir with
+                        | Left -> seq { yield (currZeroX - 1, currZeroY), Below; yield (currZeroX, currZeroY + 1), Left }
+                        | Right -> seq { yield (currZeroX - 1, currZeroY), Below; yield (currZeroX, currZeroY - 1), Right }
+                        | Below -> seq { yield (currZeroX - 1, currZeroY), Below; yield (currZeroX, currZeroY - 1), Right; yield (currZeroX, currZeroY + 1), Left }
+
+                    let filterMoves =
+                        nextMoves 
+                        |> Seq.filter (fun (point, _) -> 
+                            let checkPrevStates =
+                                match zeroStatesDict.TryGetValue point with
+                                | true, prevSteps when prevSteps < currSteps + 1 -> false
+                                | _ -> true
+                            let checkAvail =
+                                ((map |> Map.tryFind point |> Option.defaultValue (Integer.MaxValue, Integer.MaxValue)) |> fst) <= currAvail
+                            checkPrevStates && checkAvail)
+                    (currSolution, filterMoves)
+                    ||> Seq.fold (fun currSolution (nextPoint, fromDir) ->
+                        let solution = stepsToZeroGoal nextPoint (currSteps + 1) fromDir currSolution
+                        let currSolution =
+                            match solution, currSolution with
+                            | None, _ -> currSolution
+                            | Some newSteps, Some currSteps when currSteps < newSteps -> currSolution
+                            | _ -> solution
+                        currSolution)
+
+
+
+
+        let isZero i = i = 0
+        let zeroPoint = map |> Map.toSeq |> Seq.filter (snd >> fst >> isZero) |> Seq.map fst |> Seq.head
+        
+        let steps = stepsToZeroGoal zeroPoint 0 Below None
+
+        let queue = Queue<Map<(int*int),(int*int)>*(int*int)*int>()
+        queue.Enqueue((map, (0, maxY), 0))
+        ()
+        |> Seq.unfold (fun _ ->
+            if queue.Count = 0 then None
+            else
+                let (currMap, (currGX, currGY), currSteps) = queue.Dequeue()
+                let possibleMoves =
+                    currMap
+                    |> Map.toSeq
+                    |> Seq.allPairs (currMap |> Map.toSeq)
+                    |> Seq.filter (fun (((xA, yA), (usedA, _)), ((xB, yB), (usedB, availB))) ->
+                        usedB = 0
+                        && usedA <> 0 
+                        && (xB < 3 || xB <= xA)
+                        && (xA <> xB || yA <> yB) 
+                        && (xA = xB || yA = yB) 
+                        && (Math.Abs(xA - xB) = 1 || Math.Abs(yA - yB) = 1) 
+                        && usedA <= availB)
+                    |> Seq.toList
+                if possibleMoves |> Seq.exists (fun (((xA, yA), _), ((xB, yB), _)) -> xB = 0 && yB = 0 && xA = currGX && yA = currGX) then Some (((0, 0), currSteps + 1), ())
+                else
+                    let currSteps = currSteps + 1
+                    possibleMoves
+                    |> Seq.iter (fun (((xA, yA), (usedA, availA)), ((xB, yB), (usedB, availB))) ->
+                        let nextMap = currMap |> Map.add (xA, yA) (0, availA + usedA) |> Map.add (xB, yB) (usedB + usedA, availB - usedA)
+                        let (nextGX, nextGY) = if xA = currGX && yA = currGY then xB, yB else currGX, currGY
+                        queue.Enqueue((nextMap, (nextGX, nextGY), currSteps)))
+                    Some (((currGX, currGY), currSteps), ()))
+        |> Seq.filter (fun ((gX, gY), _) -> gX = 0 && gY = 0)
+        |> Seq.map snd
+        |> Seq.head
+        
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2016.22.txt"
 
-        let result1 = 0
+        let nodes = input |> parse 
 
-        let result2 = 0
+        let result1 = nodes |> getCountOfViablePairs
+
+        let result2 = nodes |> getMinStepsToGoal
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day23 =
+    type Program = { InstructionPointer:int; Registers:Map<char,int>; Instructions:(Program->Program) array}
+    
+    let nop prog = { prog with InstructionPointer = prog.InstructionPointer + 1 }
+    
+    let parse (input:string) =
+        let textInstructions =
+            input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+
+        let rec compileInstructionToFunc line =
+            match line with
+            | Regex "cpy (.+) (.)" (textValue::textReg::[]) ->
+                let regToCopyTo = textReg.Chars 0
+                match Integer.TryParse textValue, Integer.TryParse textReg with
+                | _, (true, _) -> nop
+                | (true, value), _ -> (fun prog ->
+                    { prog with InstructionPointer = prog.InstructionPointer + 1; Registers = prog.Registers |> Map.add regToCopyTo value})
+                | (false, _), _ -> 
+                    let regToCopyFrom = textValue.Chars 0
+                    (fun prog ->
+                        let value = prog.Registers |> Map.find regToCopyFrom
+                        { prog with InstructionPointer = prog.InstructionPointer + 1; Registers = prog.Registers |> Map.add regToCopyTo value})
+            | Regex "inc (.)" (textReg::[]) ->
+                let regToIncreace = textReg.Chars 0
+                (fun prog ->
+                    let value = (prog.Registers |> Map.find regToIncreace) + 1
+                    { prog with InstructionPointer = prog.InstructionPointer + 1; Registers = prog.Registers |> Map.add regToIncreace value})
+            | Regex "dec (.)" (textReg::[]) ->
+                let regToDecreace = textReg.Chars 0
+                (fun prog ->
+                    let value = (prog.Registers |> Map.find regToDecreace) - 1
+                    { prog with InstructionPointer = prog.InstructionPointer + 1; Registers = prog.Registers |> Map.add regToDecreace value})
+            | Regex "jnz (.+) (.+)" (textValue::textOffset::[]) ->
+                match Integer.TryParse textValue, Integer.TryParse textOffset with
+                | (true, value), (true, offset) ->
+                    let offset = if offset = 0 then 1 else offset
+                    if value = 0 then nop 
+                    else (fun prog -> { prog with InstructionPointer = prog.InstructionPointer + (offset |> int) })
+                | (true, value), (false, _) ->
+                    if value = 0 then nop 
+                    else 
+                        let offsetReg = textOffset.Chars 0
+                        (fun prog -> 
+                                let offset = prog.Registers |> Map.find offsetReg
+                                let offset = if offset = 0 then 1 else offset
+                                { prog with InstructionPointer = prog.InstructionPointer + (offset |> int) })
+                | (false, _), (true, offset) ->
+                    let offset = if offset = 0 then 1 else offset
+                    let valueReg = textValue.Chars 0
+                    (fun prog ->
+                            let value = prog.Registers |> Map.find valueReg
+                            if value = 0 then prog |> nop
+                            else { prog with InstructionPointer = prog.InstructionPointer + (offset |> int) })
+                | (false, _), (false, _) ->
+                    let valueReg = textValue.Chars 0
+                    let offsetReg = textOffset.Chars 0
+                    (fun prog ->
+                            let value = prog.Registers |> Map.find valueReg
+                            let offset = prog.Registers |> Map.find offsetReg
+                            let offset = if offset = 0 then 1 else offset
+                            if value = 0 then prog |> nop
+                            else { prog with InstructionPointer = prog.InstructionPointer + (offset |> int) })
+            | Regex "tgl (.)" (textReg::[]) ->
+                let reg = textReg.Chars 0
+                (fun prog ->
+                    let value = prog.InstructionPointer + (prog.Registers |> Map.find reg)
+                    if value < 0 || value >= textInstructions.Length then { prog with InstructionPointer = prog.InstructionPointer + 1 }
+                    else
+                        let textInstruction = textInstructions.[value]
+                        let toggledInstruction =
+                            match textInstruction.Substring(0, 3) with
+                            | "inc" -> textInstruction.Remove(0, 3).Insert(0, "dec") |> compileInstructionToFunc
+                            | "dec" | "tgl" -> textInstruction.Remove(0, 3).Insert(0, "inc") |> compileInstructionToFunc
+                            | "cpy" -> textInstruction.Remove(0, 3).Insert(0, "jnz") |> compileInstructionToFunc
+                            | "jnz" -> textInstruction.Remove(0, 3).Insert(0, "cpy") |> compileInstructionToFunc
+                            | _ -> nop
+                        prog.Instructions.[value] <- toggledInstruction
+                        { prog with InstructionPointer = prog.InstructionPointer + 1 })
+            | _ -> nop
+        let instructions =
+            textInstructions
+            |> Seq.map compileInstructionToFunc
+            |> Seq.toArray
+        { InstructionPointer = 0; Registers = (seq { for c in 'a' .. 'd' do yield (c, 0)} |> Map.ofSeq); Instructions = instructions }
+    
+    let runProgram prog =
+        prog
+        |> Seq.unfold (fun prog ->
+            if prog.InstructionPointer < 0 || prog.InstructionPointer >= prog.Instructions.Length then
+                None
+            else
+                let prog = 
+                    if prog.InstructionPointer = 4 then
+                        // the task description hinted to shortcut the multiplication
+                        let (a, b, d) = prog.Registers |> Map.find 'a', prog.Registers |> Map.find 'b', prog.Registers |> Map.find 'd'
+                        let registers = prog.Registers |> Map.add 'a' (a + b * d) |> Map.add 'd' 0 |> Map.add '0' 0
+                        { prog with Registers = registers; InstructionPointer = 9}
+                    else prog.Instructions.[prog.InstructionPointer] prog
+                Some (prog, prog))
+        |> Seq.last
+    
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2016.23.txt"
+    
+        let prog = input |> parse
+    
+        let result1 = ({ prog with Registers = prog.Registers |> Map.add 'a' 7 } |> runProgram).Registers |> Map.find 'a'
+    
+        let prog = input |> parse
 
-        let result1 = 0
-
-        let result2 = 0
-
+        let result2 = ({ prog with Registers = prog.Registers |> Map.add 'a' 12 } |> runProgram).Registers |> Map.find 'a'
+    
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day24 =
