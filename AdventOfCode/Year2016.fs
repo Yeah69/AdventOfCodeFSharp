@@ -1193,24 +1193,167 @@ module Day19 =
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day20 =
+    let parse (input:string) =
+        let sort ranges =
+            ranges
+            |> Seq.sortWith (fun (start1, end1) (start2, end2) ->
+                if start1 < start2 then -1
+                elif start2 < start1 then 1
+                else
+                    let range1 = end1 - start1
+                    let range2 = end2 - start2
+                    if range1 > range2 then -1 
+                    elif range2 > range1 then 1
+                    else 0)
+
+        let ranges =
+            input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+            |> Seq.choose (fun line ->
+                match line with
+                | Regex "(\d+)\-(\d+)" (textStart::textEnd::[]) -> Some(Long.Parse textStart, Long.Parse textEnd)
+                | _ -> None)
+            |> Seq.toArray
+
+        ([], ranges |> sort)
+        ||> Seq.fold (fun currRangeList (rangeStart, rangeEnd) ->
+            match currRangeList with 
+            | (currStart, currEnd)::currRemainder when rangeStart <= currEnd + 1L ->
+                let currEnd = if rangeEnd > currEnd then rangeEnd else currEnd
+                (currStart, currEnd)::currRemainder
+            | _ -> (rangeStart, rangeEnd)::currRangeList)
+        |> Seq.rev
+        |> Seq.toArray
+
+    let getFirstValidIP ranges =        
+        let (startPoint, endPoint) = ranges |> Seq.head
+        if startPoint = 0L then endPoint + 1L else 0L
+
+    let getCountOfValidIPs ranges =
+        let beginning = if (ranges |> Array.head |> fst) > 0L then (ranges |> Array.head |> fst) - 1L else 0L
+        let finish = if (ranges |> Array.last |> snd) < 4294967295L then 4294967295L - (ranges |> Array.last |> snd) else 0L
+        let sumOfRanges = 
+            ranges
+            |> Seq.pairwise 
+            |> Seq.map (fun ((_, end1), (start2, _)) -> start2 - end1 - 1L)
+            |> Seq.sum
+        beginning + sumOfRanges + finish
+
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2016.20.txt"
 
-        let result1 = 0
+        let ranges = input |> parse
 
-        let result2 = 0
+        let result1 = ranges |> getFirstValidIP
+
+        let result2 = ranges |> getCountOfValidIPs
 
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day21 =
+    type Direction = | Left | Right
+    type Instruction = | SwapPositions of int*int 
+                       | SwapLetters of char*char
+                       | RotateSteps of Direction*int
+                       | RotateBasedOnLetter of char
+                       | ReversePositions of int*int
+                       | MovePosition of int*int
+
+    let parse (input:string) =
+        input.Split ([| System.Environment.NewLine |], System.StringSplitOptions.None)
+        |> Seq.choose (fun line ->
+            match line with
+            | Regex "swap position (\d) with position (\d)" (textFirst::textSecond::[]) -> Some (SwapPositions (Integer.Parse textFirst, Integer.Parse textSecond))
+            | Regex "swap letter (.) with letter (.)" (textFirst::textSecond::[]) -> Some (SwapLetters (textFirst.Chars 0, textSecond.Chars 0))
+            | Regex "rotate (left|right) (\d) steps*" (textDirection::textSteps::[]) -> Some (RotateSteps ((if textDirection = "left" then Left else Right), Integer.Parse textSteps))
+            | Regex "rotate based on position of letter (.)" (textLetter::[]) -> Some (RotateBasedOnLetter (textLetter.Chars 0))
+            | Regex "reverse positions (\d) through (\d)" (textFirst::textSecond::[]) -> Some (ReversePositions (Integer.Parse textFirst, Integer.Parse textSecond))
+            | Regex "move position (\d) to position (\d)" (textFirst::textSecond::[]) -> Some (MovePosition (Integer.Parse textFirst, Integer.Parse textSecond))
+            | _ -> None)
+        |> Seq.toArray
+
+    let swapPositions first second (currText:string) =
+        let (firstChar, secondChar) = currText.Chars first, currText.Chars second
+        currText
+            .Remove(first, 1)
+            .Insert(first, secondChar.ToString())
+            .Remove(second, 1)
+            .Insert(second, firstChar.ToString())
+
+    let rotate direction steps (currText:string) =
+        let steps = if direction = Left then currText.Length - steps else steps
+        let offset = currText.Length - steps
+        new System.String(
+            seq { 0 .. currText.Length - 1 }
+            |> Seq.map (fun i -> currText.Chars ((i + offset) % currText.Length))
+            |> Seq.toArray)
+
+    let reverse start finish (currText:string) =
+        let length = finish - start + 1
+        let subString = currText.Substring (start, length)
+        let reversed = new System.String(subString |> Seq.rev |> Seq.toArray)
+        currText.Replace(subString, reversed)
+
+    let reverseDirection direction = match direction with | Left -> Right | Right -> Left
+    
+    let reverseRotateSteps pos =
+        match pos with
+        | 0 -> 1
+        | 1 -> 1
+        | 2 -> 6
+        | 3 -> 2
+        | 4 -> 7
+        | 5 -> 3
+        | 6 -> 0
+        | 7 -> 4
+        | _ -> 0
+
+    let scramble (text:string) instructions =
+        (text, instructions)
+        ||> Seq.fold (fun currText instruction ->
+            match instruction with
+            | SwapPositions (first, second) -> currText |> swapPositions first second
+            | SwapLetters (first, second) ->
+                let (firstPos, secondPos) = currText.IndexOf first, currText.IndexOf second
+                currText |> swapPositions firstPos secondPos
+            | RotateSteps (direction, steps) -> currText |> rotate direction (steps % currText.Length)
+            | RotateBasedOnLetter (letter) ->
+                let indexOfLetter = currText.IndexOf letter
+                let steps = if indexOfLetter < 4 then indexOfLetter + 1 else indexOfLetter + 2
+                currText |> rotate Right (steps % currText.Length)
+            | ReversePositions (start, finish) -> currText |> reverse start finish
+            | MovePosition (first, second) -> 
+                let char = currText.Chars first
+                currText.Remove(first, 1).Insert(second, char.ToString()))
+                
+
+    let unscramble (text:string) instructions =
+        (text, instructions |> Seq.rev)
+        ||> Seq.fold (fun currText instruction ->
+            match instruction with
+            | SwapPositions (first, second) -> currText |> swapPositions first second
+            | SwapLetters (first, second) ->
+                let (firstPos, secondPos) = currText.IndexOf first, currText.IndexOf second
+                currText |> swapPositions firstPos secondPos
+            | RotateSteps (direction, steps) -> currText |> rotate (direction |> reverseDirection) (steps % currText.Length)
+            | RotateBasedOnLetter (letter) ->
+                let indexOfLetter = currText.IndexOf letter
+                let steps = indexOfLetter |> reverseRotateSteps
+                currText |> rotate Left (steps % currText.Length)
+            | ReversePositions (start, finish) -> currText |> reverse start finish
+            | MovePosition (first, second) -> 
+                let char = currText.Chars second
+                currText.Remove(second, 1).Insert(first, char.ToString()))
+
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2016.21.txt"
 
-        let result1 = 0
+        let instructions = input |> parse
 
-        let result2 = 0
+        let result1 = instructions |> scramble "abcdefgh"
 
-        { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
+        let result2 = instructions |> unscramble "fbgdceah"
+
+        { First = result1; Second = result2 }
 
 module Day22 =
     let go() =
