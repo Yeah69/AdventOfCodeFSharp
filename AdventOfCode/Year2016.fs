@@ -1750,11 +1750,141 @@ module Day24 =
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day25 =
+    type Program = { InstructionPointer:int; Registers:Map<char,int>; Instructions:(Program->Program) array; OutSignal:string }
+    
+    let nop prog = { prog with InstructionPointer = prog.InstructionPointer + 1 }
+    
+    let parse (input:string) =
+        let textInstructions =
+            input.Split([| System.Environment.NewLine |], System.StringSplitOptions.None)
+
+        let rec compileInstructionToFunc line =
+            match line with
+            | Regex "cpy (.+) (.)" (textValue::textReg::[]) ->
+                let regToCopyTo = textReg.Chars 0
+                match Integer.TryParse textValue, Integer.TryParse textReg with
+                | _, (true, _) -> nop
+                | (true, value), _ -> (fun prog ->
+                    { prog with InstructionPointer = prog.InstructionPointer + 1; Registers = prog.Registers |> Map.add regToCopyTo value})
+                | (false, _), _ -> 
+                    let regToCopyFrom = textValue.Chars 0
+                    (fun prog ->
+                        let value = prog.Registers |> Map.find regToCopyFrom
+                        { prog with InstructionPointer = prog.InstructionPointer + 1; Registers = prog.Registers |> Map.add regToCopyTo value})
+            | Regex "inc (.)" (textReg::[]) ->
+                let regToIncreace = textReg.Chars 0
+                match Integer.TryParse textReg with
+                | true, _ -> nop
+                | _ -> 
+                    (fun prog ->
+                        let value = (prog.Registers |> Map.find regToIncreace) + 1
+                        { prog with InstructionPointer = prog.InstructionPointer + 1; Registers = prog.Registers |> Map.add regToIncreace value})
+            | Regex "dec (.)" (textReg::[]) ->
+                let regToDecreace = textReg.Chars 0
+                match Integer.TryParse textReg with
+                | true, _ -> nop
+                | _ -> 
+                    (fun prog ->
+                        let value = (prog.Registers |> Map.find regToDecreace) - 1
+                        { prog with InstructionPointer = prog.InstructionPointer + 1; Registers = prog.Registers |> Map.add regToDecreace value})
+            | Regex "jnz (.+) (.+)" (textValue::textOffset::[]) ->
+                match Integer.TryParse textValue, Integer.TryParse textOffset with
+                | (true, value), (true, offset) ->
+                    let offset = if offset = 0 then 1 else offset
+                    if value = 0 then nop 
+                    else (fun prog -> { prog with InstructionPointer = prog.InstructionPointer + (offset |> int) })
+                | (true, value), (false, _) ->
+                    if value = 0 then nop 
+                    else 
+                        let offsetReg = textOffset.Chars 0
+                        (fun prog -> 
+                                let offset = prog.Registers |> Map.find offsetReg
+                                let offset = if offset = 0 then 1 else offset
+                                { prog with InstructionPointer = prog.InstructionPointer + (offset |> int) })
+                | (false, _), (true, offset) ->
+                    let offset = if offset = 0 then 1 else offset
+                    let valueReg = textValue.Chars 0
+                    (fun prog ->
+                            let value = prog.Registers |> Map.find valueReg
+                            if value = 0 then prog |> nop
+                            else { prog with InstructionPointer = prog.InstructionPointer + (offset |> int) })
+                | (false, _), (false, _) ->
+                    let valueReg = textValue.Chars 0
+                    let offsetReg = textOffset.Chars 0
+                    (fun prog ->
+                            let value = prog.Registers |> Map.find valueReg
+                            let offset = prog.Registers |> Map.find offsetReg
+                            let offset = if offset = 0 then 1 else offset
+                            if value = 0 then prog |> nop
+                            else { prog with InstructionPointer = prog.InstructionPointer + (offset |> int) })
+            | Regex "tgl (.)" (textReg::[]) ->
+                let reg = textReg.Chars 0
+                (fun prog ->
+                    let value = prog.InstructionPointer + (prog.Registers |> Map.find reg)
+                    if value < 0 || value >= textInstructions.Length then { prog with InstructionPointer = prog.InstructionPointer + 1 }
+                    else
+                        let textInstruction = textInstructions.[value]
+                        let toggledInstruction =
+                            match textInstruction.Substring(0, 3) with
+                            | "inc" -> textInstruction.Remove(0, 3).Insert(0, "dec") |> compileInstructionToFunc
+                            | "dec" | "tgl" | "out" -> textInstruction.Remove(0, 3).Insert(0, "inc") |> compileInstructionToFunc
+                            | "cpy" -> textInstruction.Remove(0, 3).Insert(0, "jnz") |> compileInstructionToFunc
+                            | "jnz" -> textInstruction.Remove(0, 3).Insert(0, "cpy") |> compileInstructionToFunc
+                            | _ -> nop
+                        prog.Instructions.[value] <- toggledInstruction
+                        { prog with InstructionPointer = prog.InstructionPointer + 1 })
+            | Regex "out (.)" (textReg::[]) ->
+                match Integer.TryParse textReg with
+                | true, value -> 
+                    (fun prog ->
+                        let outSignal = sprintf "%s%d" prog.OutSignal value
+                        let instructionPointer = if outSignal.Length = 10 then -1 else prog.InstructionPointer + 1
+                        { prog with InstructionPointer = instructionPointer; OutSignal = outSignal})
+                | _ -> 
+                    (fun prog ->
+                        let value = (prog.Registers |> Map.find (textReg.Chars 0))
+                        let outSignal = sprintf "%s%d" prog.OutSignal value
+                        let instructionPointer = if outSignal.Length = 10 then -1 else prog.InstructionPointer + 1
+                        { prog with InstructionPointer = instructionPointer; OutSignal = outSignal})
+            | _ -> nop
+        let instructions =
+            textInstructions
+            |> Seq.map compileInstructionToFunc
+            |> Seq.toArray
+        { InstructionPointer = 0; Registers = (seq { for c in 'a' .. 'd' do yield (c, 0)} |> Map.ofSeq); Instructions = instructions; OutSignal = "" }
+    
+    let runProgram prog =
+        prog
+        |> Seq.unfold (fun prog ->
+            if prog.InstructionPointer < 0 || prog.InstructionPointer >= prog.Instructions.Length then
+                None
+            else
+                let prog = prog.Instructions.[prog.InstructionPointer] prog
+                Some (prog, prog))
+        |> Seq.last
+
+    let runDifferentInputs input =
+        let validProgram prog =
+            prog.OutSignal 
+            |> Seq.chunkBySize 2 
+            |> Seq.exists (fun chars -> chars.[0] <> '0' || chars.[1] <> '1') 
+            |> not
+
+        0
+        |> Seq.unfold (fun i ->
+            let prog = input |> parse 
+            let prog = { prog with Registers = prog.Registers |> Map.add 'a' i } |> runProgram
+            Some ((i, prog), i + 1))
+        |> Seq.filter (snd >> validProgram)
+        |> Seq.map (fst)
+        |> Seq.head
+
+    
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2016.25.txt"
-
-        let result1 = 0
+    
+        let result1 = input |> runDifferentInputs
 
         let result2 = 0
-
+    
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
