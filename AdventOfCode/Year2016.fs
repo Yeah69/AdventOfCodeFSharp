@@ -1397,7 +1397,6 @@ module Day21 =
         { First = result1; Second = result2 }
 
 module Day22 =
-    open System
     open System.Collections.Generic
     type FromDirection = | Left | Right | Below
     let parse (input:string) =
@@ -1419,89 +1418,52 @@ module Day22 =
         |> Seq.length
 
     let getMinStepsToGoal map =
+        let maxX = map |> Map.toSeq |> Seq.map (fst >> fst) |> Seq.max
         let maxY = map |> Map.toSeq |> Seq.map (fst >> snd) |> Seq.max
-        let goal = (0, maxY)
-        let goalZero = (0, maxY - 1)
+        let goalZero = (maxX - 1, 0)
 
-        let zeroStatesDict = Dictionary<(int*int), int>()
-
-        let rec stepsToZeroGoal currZero currSteps fromDir currSolution =
-            zeroStatesDict.[currZero] <- currSteps
-            let (currZeroX, currZeroY) = currZero
-            match currSolution with
-            | Some steps when steps < currSteps || goal = currZero || currZeroX < 0 || currZeroY < 0 || currZeroY > maxY -> None
-            | _ ->
-                if currZero = goalZero then Some currSteps
+        let rec stepsToZeroGoal currZero =
+            let queue = Queue<(int*int)*int>()
+            let set = Set.empty |> Set.add currZero
+            queue.Enqueue(currZero, 0)
+            
+            set
+            |> Seq.unfold (fun set ->
+                if queue.Count <= 0 then None
                 else
-                    let currAvail = 
-                        let (used, avail) = map |> Map.find currZero
+                    let (currPos, currSteps) = queue.Dequeue()
+                    let currAvail =
+                        let (used, avail) = map |> Map.find currPos
                         used + avail
-                    let nextMoves =
-                        match fromDir with
-                        | Left -> seq { yield (currZeroX - 1, currZeroY), Below; yield (currZeroX, currZeroY + 1), Left }
-                        | Right -> seq { yield (currZeroX - 1, currZeroY), Below; yield (currZeroX, currZeroY - 1), Right }
-                        | Below -> seq { yield (currZeroX - 1, currZeroY), Below; yield (currZeroX, currZeroY - 1), Right; yield (currZeroX, currZeroY + 1), Left }
-
-                    let filterMoves =
-                        nextMoves 
-                        |> Seq.filter (fun (point, _) -> 
-                            let checkPrevStates =
-                                match zeroStatesDict.TryGetValue point with
-                                | true, prevSteps when prevSteps < currSteps + 1 -> false
-                                | _ -> true
-                            let checkAvail =
-                                ((map |> Map.tryFind point |> Option.defaultValue (Integer.MaxValue, Integer.MaxValue)) |> fst) <= currAvail
-                            checkPrevStates && checkAvail)
-                    (currSolution, filterMoves)
-                    ||> Seq.fold (fun currSolution (nextPoint, fromDir) ->
-                        let solution = stepsToZeroGoal nextPoint (currSteps + 1) fromDir currSolution
-                        let currSolution =
-                            match solution, currSolution with
-                            | None, _ -> currSolution
-                            | Some newSteps, Some currSteps when currSteps < newSteps -> currSolution
-                            | _ -> solution
-                        currSolution)
-
-
+                    let (currX, currY) = currPos
+                    let nextPoints =
+                        seq { yield currX, currY - 1; yield currX + 1, currY; yield currX - 1, currY; yield currX, currY + 1 }
+                        |> Seq.filter (fun newPos -> 
+                            let (x, y) = newPos
+                            x >= 0 && y >= 0 
+                            && x <= maxX && y <= maxY 
+                            && (x <> maxX || y <> 0) 
+                            && set |> Set.contains newPos |> not)
+                        |> Seq.filter (fun newPos ->
+                            let (used, _) = map |> Map.find newPos
+                            currAvail >= used)
+                        |> Seq.toList
+                    let currSteps = currSteps + 1
+                    if nextPoints |> Seq.exists (equal goalZero) then Some((goalZero, currSteps), set)
+                    else
+                        let set = (set, nextPoints) ||> Seq.fold (fun set point -> set |> Set.add point)
+                        nextPoints |> Seq.iter (fun pos -> 
+                            queue.Enqueue(pos, currSteps))
+                        Some((currPos, currSteps - 1), set))
+            |> Seq.filter (fst >> (equal goalZero))
+            |> Seq.map snd
+            |> Seq.head
 
 
         let isZero i = i = 0
         let zeroPoint = map |> Map.toSeq |> Seq.filter (snd >> fst >> isZero) |> Seq.map fst |> Seq.head
         
-        let steps = stepsToZeroGoal zeroPoint 0 Below None
-
-        let queue = Queue<Map<(int*int),(int*int)>*(int*int)*int>()
-        queue.Enqueue((map, (0, maxY), 0))
-        ()
-        |> Seq.unfold (fun _ ->
-            if queue.Count = 0 then None
-            else
-                let (currMap, (currGX, currGY), currSteps) = queue.Dequeue()
-                let possibleMoves =
-                    currMap
-                    |> Map.toSeq
-                    |> Seq.allPairs (currMap |> Map.toSeq)
-                    |> Seq.filter (fun (((xA, yA), (usedA, _)), ((xB, yB), (usedB, availB))) ->
-                        usedB = 0
-                        && usedA <> 0 
-                        && (xB < 3 || xB <= xA)
-                        && (xA <> xB || yA <> yB) 
-                        && (xA = xB || yA = yB) 
-                        && (Math.Abs(xA - xB) = 1 || Math.Abs(yA - yB) = 1) 
-                        && usedA <= availB)
-                    |> Seq.toList
-                if possibleMoves |> Seq.exists (fun (((xA, yA), _), ((xB, yB), _)) -> xB = 0 && yB = 0 && xA = currGX && yA = currGX) then Some (((0, 0), currSteps + 1), ())
-                else
-                    let currSteps = currSteps + 1
-                    possibleMoves
-                    |> Seq.iter (fun (((xA, yA), (usedA, availA)), ((xB, yB), (usedB, availB))) ->
-                        let nextMap = currMap |> Map.add (xA, yA) (0, availA + usedA) |> Map.add (xB, yB) (usedB + usedA, availB - usedA)
-                        let (nextGX, nextGY) = if xA = currGX && yA = currGY then xB, yB else currGX, currGY
-                        queue.Enqueue((nextMap, (nextGX, nextGY), currSteps)))
-                    Some (((currGX, currGY), currSteps), ()))
-        |> Seq.filter (fun ((gX, gY), _) -> gX = 0 && gY = 0)
-        |> Seq.map snd
-        |> Seq.head
+        stepsToZeroGoal zeroPoint + 1 + (maxX - 1) * 5
         
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2016.22.txt"
