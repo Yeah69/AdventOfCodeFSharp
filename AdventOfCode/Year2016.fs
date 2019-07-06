@@ -712,23 +712,15 @@ module Day11 =
         let pairedElementsOnF1 = components |> Seq.filter (fun comp -> (comp |> getFloor) = F1) |> Seq.groupBy getLabel |> Seq.filter (fun (_, group) -> group |> Seq.length = 2) |> Seq.collect snd
         let initialComponents =  components |> Array.except pairedElementsOnF1
                            
-        
-        let (firstLength, firstSteps, stableDiff) =
-            seq { yield (initialComponents, (initialComponents |> findSolution)) }
-            |> Seq.append ((initialComponents, seq { 'a' .. 'z'}) 
-                            ||> Seq.scan (fun components c -> components |> Array.append ([| Microchip (c.ToString(), F1); Generator (c.ToString(), F1) |])) 
-                            |> Seq.map (fun components -> components, (components |> findSolution)))
+        let (firstLength, firstSteps) = initialComponents |> Array.length, initialComponents |> findSolution
 
-            // track difference of outcome if successively adding matching pairs to F1
-            |> Seq.pairwise
-            |> Seq.map (fun ((comps1, count1), (_, count2)) -> comps1.Length, count1, count2 - count1)
-            // get the data of the first occurence which lead to a stable difference
-            |> Seq.pairwise
-            |> Seq.filter (fun ((_, _, diff1), (_, _, diff2)) -> diff1 = diff2)
-            |> Seq.map (fun ((length, steps, diff), _) -> length, steps, diff)
-            |> Seq.head
+        let secondSteps = initialComponents |> Array.append ([| Microchip ("a", F1); Generator ("a", F1) |]) |> findSolution
 
-        firstSteps + (10 - firstLength) / 2 * stableDiff, firstSteps + (14 - firstLength) / 2 * stableDiff
+        let diff = secondSteps - firstSteps
+
+        let calculateSteps componentCount = firstSteps + (componentCount - firstLength) / 2 * diff
+
+        10 |> calculateSteps, 14 |> calculateSteps
         
     let go() =
         let input = inputFromResource "AdventOfCode.Inputs._2016.11.txt"
