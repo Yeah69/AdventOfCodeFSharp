@@ -826,14 +826,12 @@ module Day12 =
                 | true, value -> 
                     (fun prog ->
                         let outSignal = sprintf "%s%d" prog.OutSignal value
-                        let instructionPointer = if outSignal.Length = 10 then -1 else prog.InstructionPointer + 1
-                        { prog with InstructionPointer = instructionPointer; OutSignal = outSignal})
+                        { prog with InstructionPointer = prog.InstructionPointer + 1; OutSignal = outSignal})
                 | _ -> 
                     (fun prog ->
                         let value = (prog.Registers |> Map.find (textReg.Chars 0))
                         let outSignal = sprintf "%s%d" prog.OutSignal value
-                        let instructionPointer = if outSignal.Length = 10 then -1 else prog.InstructionPointer + 1
-                        { prog with InstructionPointer = instructionPointer; OutSignal = outSignal})
+                        { prog with InstructionPointer = prog.InstructionPointer + 1; OutSignal = outSignal})
             | _ -> nop
         let instructions =
             textInstructions
@@ -1666,6 +1664,13 @@ module Day24 =
         { First = sprintf "%d" result1; Second = sprintf "%d" result2 }
 
 module Day25 =
+    let runProgram = Day12.runProgram' (fun prog -> 
+        if prog.InstructionPointer = prog.Instructions.Length - 1 then
+            // shortcut: the original program would loop inifinetly 
+            // but for us the first complete input is sufficient
+            { prog with InstructionPointer = -1}
+        else prog.Instructions.[prog.InstructionPointer] prog)
+
     let runDifferentInputs input =
         let validProgram prog =
             prog.OutSignal 
@@ -1676,7 +1681,7 @@ module Day25 =
         0
         |> Seq.unfold (fun i ->
             let prog = input |> Day12.parse 
-            let prog = { prog with Registers = prog.Registers |> Map.add 'a' i } |> Day12.runProgram
+            let prog = { prog with Registers = prog.Registers |> Map.add 'a' i } |> runProgram
             Some ((i, prog), i + 1))
         |> Seq.filter (snd >> validProgram)
         |> Seq.map (fst)
